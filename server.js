@@ -5,8 +5,8 @@ const cors = require("cors");
 const app = express();
 
 connectDB();
-
-app.use(
+app.use(cors());
+/* app.use(
   cors({
     origin: "http://localhost:5173", // Replace with your frontend URL
     methods: ["GET", "POST", "DELETE", "OPTIONS"], // Specify allowed methods
@@ -17,7 +17,7 @@ app.use(
       "x-encrypted-machine-id",
     ], // Specify allowed headers
   })
-);
+); */
 app.use(express.json());
 
 app.use("/api/licence", require("./routes/licenseRoutes"));
