@@ -1,5 +1,5 @@
+const nanoid = require("nanoid");
 const License = require("../models/licensesSchema");
-const { nanoid } = require("nanoid");
 const { isAdminMachine } = require("../utils/verifyAdminUtils");
 
 const getLicenses = async (req, res) => {
