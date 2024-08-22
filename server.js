@@ -5,19 +5,21 @@ const cors = require("cors");
 const app = express();
 
 connectDB();
-app.use(cors());
-/* app.use(
+app.use(
   cors({
-    origin: "http://localhost:5173", // Replace with your frontend URL
-    methods: ["GET", "POST", "DELETE", "OPTIONS"], // Specify allowed methods
+    origin: [
+      "http://localhost:5173",
+      "https://csv-loader-novi-31103055b9bb.herokuapp.com/",
+    ],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     allowedHeaders: [
       "Content-Type",
       "Authorization",
       "x-device-id",
       "x-encrypted-machine-id",
-    ], // Specify allowed headers
+    ],
   })
-); */
+);
 app.use(express.json());
 
 app.use("/api/licence", require("./routes/licenseRoutes"));
