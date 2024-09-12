@@ -322,7 +322,7 @@ function processExcelFile(
     if (cumulativeEXPOS > sirinaLimit) {
       cumulativeEXPOS = 0; // Reset cumulative EXPOX for the new row
       expos = 0; // Reset expos for the new row
-      ezpos += rowIncrement; // Increment the Z position to create a new row
+      ezpos += rowIncrement + width; // Increment the Z position to create a new row
       rowIncrement += 300; // Adjust the row height if necessary
       placedElements.length = 0; // Reset placed elements for the new row
     }
