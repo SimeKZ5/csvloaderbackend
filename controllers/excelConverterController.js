@@ -228,10 +228,13 @@ function processExcelFile(
       '&quot;PTOCKA=0&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=0&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=1.55999994277954&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0&quot;,&quot;PTNE0=0.439999997615814&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0&quot;,&quot;PTOCKA=1&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=0&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0.439999997615814&quot;,&quot;PTNE0=0&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=1.55999994277954&quot;,&quot;PTOCKA=2&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=2&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0.439999997615814&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=2&quot;,&quot;PTNE0=1.55999994277954&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=2&quot;,&quot;PTOCKA=3&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=2&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=2&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=1.55999994277954&quot;,&quot;PTNE0=2&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0.439999997615814&quot;,"',
   });
 
-  let maxRowEZPOS = 0;
-  let cumulativeWidth = 0;
-  let currentRowMaxHeight = 0;
+  let cumulativeEXPOS = 0; // Track X position for the current row
+  let currentRowMaxWidth = 0; // Track the max width (height in your case) in the current row for EZPOS adjustment
+  let ezpos = 0; // Starting Z position
+  let rowIncrement = 300; // Keep track of the Z position for elements in new rows
+  const placedElements = []; // Store placed elements for overlap checking
 
+  // Loop through each row
   let rowIndex = startRow - 1;
   while (rowIndex < data.length) {
     const rowData = data[rowIndex];
@@ -293,28 +296,34 @@ function processExcelFile(
       noteBoth = `&quot;${note_2}&quot;`;
     }
 
-    // Check if the current element fits in the row
-    if (cumulativeWidth + width > sirinaLimit) {
-      // Move to the next row, reset cumulative width and update the maxRowEZPOS
-      cumulativeWidth = 0;
-      ezpos += currentRowMaxHeight; // Move down by the height of the tallest element in the current row
-      maxRowEZPOS = ezpos;
-      currentRowMaxHeight = 0; // Reset for the new row
-      placedElements.length = 0; // Reset placed elements for overlap checking in the new row
+    // Calculate EXPOS for the current element
+    if (cumulativeEXPOS + width > sirinaLimit) {
+      // Reset X position for the new row
+      cumulativeEXPOS = 0;
+
+      // Adjust the Z position (EZPOS) for the new row based on the largest width in the previous row
+      ezpos += currentRowMaxWidth + rowIncrement; // Add rowIncrement as padding between rows
+
+      // Reset the max width for the next row
+      currentRowMaxWidth = 0;
+
+      // Reset placed elements for the new row
+      placedElements.length = 0;
     }
 
-    // Calculate EXPOS for the current element
-    let expos = cumulativeWidth;
-    let isOverlapping = true;
+    // Calculate EXPOS (X position) for the current element
+    let expos = cumulativeEXPOS;
 
-    // Prevent overlap with previously placed elements in the row
+    // Check for overlap and adjust EXPOS if necessary
+    let isOverlapping = true;
     while (isOverlapping) {
       isOverlapping = false;
       for (const prevElement of placedElements) {
         const prevStart = prevElement.expos;
         const prevEnd = prevStart + prevElement.width;
         if (expos < prevEnd && expos + width > prevStart) {
-          expos = prevEnd; // Move the current element to the right
+          // Adjust EXPOS to the right of the last placed element
+          expos = prevEnd;
           isOverlapping = true;
           break;
         }
@@ -324,12 +333,12 @@ function processExcelFile(
     // Add the current element to placedElements for future overlap checking
     placedElements.push({ expos, width });
 
-    // Add the width of the current element to the cumulative width
-    cumulativeWidth = expos + width;
+    // Update the cumulative EXPOS by adding the current element's width
+    cumulativeEXPOS = expos + width;
 
-    // Update the maximum height of the current row
-    if (th > currentRowMaxHeight) {
-      currentRowMaxHeight = th;
+    // Track the maximum width (height in this case) of elements in the row for adjusting EZPOS of the next row
+    if (width > currentRowMaxWidth) {
+      currentRowMaxWidth = width;
     }
 
     /*     const str_0 = l_mat_1 === "" ? false : true;
