@@ -133,12 +133,12 @@ function processExcelFile(
     SLAG: "1",
   });
 
-  const sirina = 5; // SIRINA value in meters (as a number)
+  const sirina = 10; // SIRINA value in meters (as a number)
   const sirinaLimit = sirina * 1000; // Convert SIRINA from meters to millimeters (5000 mm)
 
   xmlRoot.ele("SOBA", {
-    SIRINA: sirina.toString(),
-    DUZINA: "5",
+    SIRINA: "5",
+    DUZINA: sirina.toString(),
     VISINA: "1.20000004768372",
     VISINALOW: "1.39999997615814",
     ZDT: "1458",
@@ -227,7 +227,9 @@ function processExcelFile(
     PATHTOCKE:
       '&quot;PTOCKA=0&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=0&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=1.55999994277954&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0&quot;,&quot;PTNE0=0.439999997615814&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0&quot;,&quot;PTOCKA=1&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=0&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0.439999997615814&quot;,&quot;PTNE0=0&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=1.55999994277954&quot;,&quot;PTOCKA=2&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=2&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0.439999997615814&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=2&quot;,&quot;PTNE0=1.55999994277954&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=2&quot;,&quot;PTOCKA=3&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=2&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=2&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=1.55999994277954&quot;,&quot;PTNE0=2&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0.439999997615814&quot;,"',
   });
+
   let cumulativeEXPOS = 0;
+  let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
   // Assume the default row is 12 if no startRow is provided
   let rowIndex = startRow - 1; // Convert to zero-based index
 
@@ -294,15 +296,17 @@ function processExcelFile(
     }
 
     // Calculate EXPOS for the current element
-    let expos = cumulativeEXPOS; // Use cumulativeEXPOS from the previous iteration
-    cumulativeEXPOS += parseFloat(length); // Add the current element's ESIRINA (length) to the cumulative value
+    let expos = cumulativeEXPOS; // Start from the current cumulative EXPOS
+    cumulativeEXPOS += parseFloat(length); // Update cumulative EXPOS
 
-    // If the cumulative EXPOS exceeds the SIRINA limit, reset EZPOS to 500 and reset EXPOS
-    let ezpos = "0";
+    let ezpos = width; // Start EZPOS from EDUBINA (element's width)
+
+    // If the cumulative EXPOS exceeds the room width (sirinaLimit)
     if (cumulativeEXPOS > sirinaLimit) {
-      ezpos = "500"; // Set EZPOS to 500
-      cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's ESIRINA
-      expos = 0; // Reset EXPOX for the new line
+      expos = 0; // Reset EXPOS for a new row
+      ezpos += rowIncrement + width; // Increase EZPOS by rowIncrement (300, 600, etc.)
+      cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's length
+      rowIncrement += 300; // Increase the row increment by 300 for each new row
     }
 
     /*     const str_0 = l_mat_1 === "" ? false : true;
