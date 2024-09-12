@@ -228,9 +228,10 @@ function processExcelFile(
       '&quot;PTOCKA=0&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=0&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=1.55999994277954&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0&quot;,&quot;PTNE0=0.439999997615814&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0&quot;,&quot;PTOCKA=1&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=0&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0.439999997615814&quot;,&quot;PTNE0=0&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=1.55999994277954&quot;,&quot;PTOCKA=2&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=2&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0.439999997615814&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=2&quot;,&quot;PTNE0=1.55999994277954&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=2&quot;,&quot;PTOCKA=3&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=2&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=2&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=1.55999994277954&quot;,&quot;PTNE0=2&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0.439999997615814&quot;,"',
   });
 
-  let rowIncrement = 300; // Y-position for the new row
   let cumulativeEXPOS = 0; // Start at 0 for the first element in the first row
-  let ezpos = 0; // Keep track of the Z position for elements in new rows
+  let ezpos = 0; // Z-position starts at 0 and will be updated row-wise
+  const maxRowWidths = []; // Keep track of maximum widths of each row
+  let rowMaxWidth = 0; // Track the maximum width of the current row
   const placedElements = []; // Store placed elements for overlap checking
 
   // Loop through each row
@@ -304,28 +305,33 @@ function processExcelFile(
       for (const prevElement of placedElements) {
         const prevStart = prevElement.expos;
         const prevEnd = prevStart + prevElement.width;
+
+        // Check if the current element is inside the previous element's space
         if (expos < prevEnd && expos + width > prevStart) {
-          expos = prevEnd;
+          expos = prevEnd; // Move the current element to the right after the previous element
           isOverlapping = true;
           break;
         }
       }
     }
 
-    // Add the current element to placedElements for future overlap checking
-    placedElements.push({ expos, width });
-
-    // Add the element's length to cumulativeEXPOS
+    // Add the current element's position to the cumulative EXPOX
     cumulativeEXPOS = expos + length;
 
-    // If the cumulative width exceeds the room width (sirinaLimit), move to a new row
+    // Check if the current row exceeds the room width (sirinaLimit)
     if (cumulativeEXPOS > sirinaLimit) {
-      cumulativeEXPOS = 0; // Reset cumulative EXPOX for the new row
-      expos = 0; // Reset expos for the new row
-      ezpos += rowIncrement + width; // Increment the Z position to create a new row
-      rowIncrement += 300; // Adjust the row height if necessary
-      placedElements.length = 0; // Reset placed elements for the new row
+      // Start a new row: Reset cumulativeEXPOS and update ezpos based on the previous rows' max width
+      cumulativeEXPOS = length; // Start new row with current element's length
+      ezpos += Math.max(...maxRowWidths) + 300; // Update Z-position using the largest width from previous rows + 300
+      maxRowWidths.push(rowMaxWidth); // Store max width of the completed row
+      rowMaxWidth = 0; // Reset max width for the new row
     }
+
+    // Update the maximum width for the current row
+    rowMaxWidth = Math.max(rowMaxWidth, width);
+
+    // Add the current element to the placedElements list to track its position and width
+    placedElements.push({ expos, width });
 
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
