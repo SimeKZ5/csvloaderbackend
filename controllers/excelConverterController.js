@@ -230,6 +230,7 @@ function processExcelFile(
 
   let cumulativeEXPOS = 0;
   let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
+  let previousElementEndX = 0;
   // Assume the default row is 12 if no startRow is provided
   let rowIndex = startRow - 1; // Convert to zero-based index
 
