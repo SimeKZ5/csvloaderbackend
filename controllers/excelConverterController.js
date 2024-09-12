@@ -296,8 +296,8 @@ function processExcelFile(
       noteBoth = `&quot;${note_2}&quot;`;
     }
 
-    // Calculate EXPOS for the current element
-    if (cumulativeEXPOS + width > sirinaLimit) {
+    // Check if adding the element's width would exceed the row's limit
+    if (cumulativeEXPOS + length > sirinaLimit) {
       // Reset X position for the new row
       cumulativeEXPOS = 0;
 
@@ -306,35 +306,13 @@ function processExcelFile(
 
       // Reset the max width for the next row
       currentRowMaxWidth = 0;
-
-      // Reset placed elements for the new row
-      placedElements.length = 0;
     }
 
     // Calculate EXPOS (X position) for the current element
-    let expos = cumulativeEXPOS;
+    let expos = cumulativeEXPOS; // No overlap in X axis, so just place next to previous element
 
-    // Check for overlap and adjust EXPOS if necessary
-    let isOverlapping = true;
-    while (isOverlapping) {
-      isOverlapping = false;
-      for (const prevElement of placedElements) {
-        const prevStart = prevElement.expos;
-        const prevEnd = prevStart + prevElement.width;
-        if (expos < prevEnd && expos + width > prevStart) {
-          // Adjust EXPOS to the right of the last placed element
-          expos = prevEnd;
-          isOverlapping = true;
-          break;
-        }
-      }
-    }
-
-    // Add the current element to placedElements for future overlap checking
-    placedElements.push({ expos, width });
-
-    // Update the cumulative EXPOS by adding the current element's width
-    cumulativeEXPOS = expos + width;
+    // Update the cumulative EXPOS by adding the current element's length (to place the next element next to it)
+    cumulativeEXPOS = expos + length;
 
     // Track the maximum width (height in this case) of elements in the row for adjusting EZPOS of the next row
     if (width > currentRowMaxWidth) {
