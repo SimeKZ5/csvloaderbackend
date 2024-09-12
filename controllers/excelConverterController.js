@@ -228,18 +228,16 @@ function processExcelFile(
       '&quot;PTOCKA=0&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=0&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=1.55999994277954&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0&quot;,&quot;PTNE0=0.439999997615814&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0&quot;,&quot;PTOCKA=1&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=0&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0.439999997615814&quot;,&quot;PTNE0=0&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=1.55999994277954&quot;,&quot;PTOCKA=2&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=2&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0.439999997615814&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=2&quot;,&quot;PTNE0=1.55999994277954&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=2&quot;,&quot;PTOCKA=3&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=2&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=2&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=1.55999994277954&quot;,&quot;PTNE0=2&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0.439999997615814&quot;,"',
   });
 
-  let cumulativeEXPOS = 0; // Track X position for the current row
-  let currentRowMaxWidth = 0; // Track the max width (height in your case) in the current row for EZPOS adjustment
-  let ezpos = 0; // Starting Z position
-  let rowIncrement = 300; // Keep track of the Z position for elements in new rows
-  const placedElements = []; // Store placed elements for overlap checking
+  let cumulativeEXPOS = 0;
+  let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
+  // Assume the default row is 12 if no startRow is provided
+  let rowIndex = startRow - 1; // Convert to zero-based index
 
-  // Loop through each row
-  let rowIndex = startRow - 1;
+  // Fetch row data
   while (rowIndex < data.length) {
     const rowData = data[rowIndex];
 
-    // Check if the row is empty and break the loop
+    // Check if the first two columns are empty, if so, break the loop
     if (!rowData[1] && !rowData[2]) {
       break;
     }
@@ -296,29 +294,19 @@ function processExcelFile(
       noteBoth = `&quot;${note_2}&quot;`;
     }
 
-    // Check if adding the element's width would exceed the row's limit
-    if (cumulativeEXPOS + length > sirinaLimit) {
-      // Reset X position for the new row
-      cumulativeEXPOS = 0;
+    // Calculate EXPOS for the current element
+    let expos = cumulativeEXPOS; // Start from the current cumulative EXPOS
+    cumulativeEXPOS += parseFloat(length); // Update cumulative EXPOS
 
-      // Adjust the Z position (EZPOS) for the new row based on the largest width in the previous row
-      ezpos += currentRowMaxWidth + rowIncrement; // Add rowIncrement as padding between rows
+    let ezpos = width; // Start EZPOS from EDUBINA (element's width)
 
-      // Reset the max width for the next row
-      currentRowMaxWidth = 0;
+    // If the cumulative EXPOS exceeds the room width (sirinaLimit)
+    if (cumulativeEXPOS > sirinaLimit) {
+      expos = 0; // Reset EXPOS for a new row
+      ezpos += rowIncrement + width; // Increase EZPOS by rowIncrement (300, 600, etc.)
+      cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's length
+      rowIncrement += 300; // Increase the row increment by 300 for each new row
     }
-
-    // Calculate EXPOS (X position) for the current element
-    let expos = cumulativeEXPOS; // No overlap in X axis, so just place next to previous element
-
-    // Update the cumulative EXPOS by adding the current element's length (to place the next element next to it)
-    cumulativeEXPOS = expos + length;
-
-    // Track the maximum width (height in this case) of elements in the row for adjusting EZPOS of the next row
-    if (width > currentRowMaxWidth) {
-      currentRowMaxWidth = width;
-    }
-
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
     const str_2 = w_mat_1 === "" ? false : true;
