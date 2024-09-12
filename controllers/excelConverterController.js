@@ -296,8 +296,18 @@ function processExcelFile(
     }
 
     // Calculate EXPOS for the current element
-    let expos = cumulativeEXPOS; // Start from the current cumulative EXPOS
-    cumulativeEXPOS += parseFloat(length); // Update cumulative EXPOS
+    let expos = cumulativeEXPOS;
+
+    // Check if the current element overlaps with the previous one
+    if (expos < previousElementEndX) {
+      expos = previousElementEndX; // Push the element out
+    }
+
+    // Update cumulativeEXPOS with the length of the current element
+    cumulativeEXPOS = expos + parseFloat(length);
+
+    // Set the end X position of the current element (i.e., the X position after adding its width)
+    previousElementEndX = expos + parseFloat(width);
 
     let ezpos = width; // Start EZPOS from EDUBINA (element's width)
 
