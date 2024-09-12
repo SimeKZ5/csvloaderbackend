@@ -230,7 +230,7 @@ function processExcelFile(
 
   let cumulativeEXPOS = 0;
   let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
-  let previousElementEndX = 0;
+  const placedElements = [];
   // Assume the default row is 12 if no startRow is provided
   let rowIndex = startRow - 1; // Convert to zero-based index
 
@@ -297,28 +297,41 @@ function processExcelFile(
     }
 
     // Calculate EXPOS for the current element
+    // Calculate the initial EXPOS for the current element
     let expos = cumulativeEXPOS;
 
-    // Check if the current element overlaps with the previous one
-    if (expos < previousElementEndX) {
-      expos = previousElementEndX; // Push the element out
+    // Adjust the position to avoid overlapping with any previous elements
+    let isOverlapping = true;
+    while (isOverlapping) {
+      isOverlapping = false;
+
+      for (const prevElement of placedElements) {
+        const prevStart = prevElement.expos;
+        const prevEnd = prevStart + prevElement.width;
+
+        // Check if the current element is inside the previous element
+        if (expos < prevEnd && expos + width > prevStart) {
+          expos = prevEnd; // Move the current element to the right after the previous element
+          isOverlapping = true;
+          break;
+        }
+      }
     }
 
-    // Update cumulativeEXPOS with the length of the current element
+    // Add the current element's position to the cumulativeEXPOS
     cumulativeEXPOS = expos + parseFloat(length);
 
-    // Set the end X position of the current element (i.e., the X position after adding its width)
-    previousElementEndX = expos + parseFloat(width);
-
-    let ezpos = width; // Start EZPOS from EDUBINA (element's width)
-
     // If the cumulative EXPOS exceeds the room width (sirinaLimit)
+    let ezpos = width; // Start EZPOS from EDUBINA (element's width)
     if (cumulativeEXPOS > sirinaLimit) {
       expos = 0; // Reset EXPOS for a new row
       ezpos += rowIncrement + width; // Increase EZPOS by rowIncrement (300, 600, etc.)
       cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's length
       rowIncrement += 300; // Increase the row increment by 300 for each new row
     }
+
+    // Add the current element to the placedElements list to track its position and width
+    placedElements.push({ expos, width });
 
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
