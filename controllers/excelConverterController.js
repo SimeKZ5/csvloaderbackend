@@ -228,21 +228,20 @@ function processExcelFile(
       '&quot;PTOCKA=0&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=0&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=1.55999994277954&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0&quot;,&quot;PTNE0=0.439999997615814&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0&quot;,&quot;PTOCKA=1&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=0&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0.439999997615814&quot;,&quot;PTNE0=0&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=1.55999994277954&quot;,&quot;PTOCKA=2&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=2&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0.439999997615814&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=2&quot;,&quot;PTNE0=1.55999994277954&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=2&quot;,&quot;PTOCKA=3&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=2&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=2&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=1.55999994277954&quot;,&quot;PTNE0=2&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0.439999997615814&quot;,"',
   });
 
-  let cumulativeEXPOS = 0;
-  let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
-  const placedElements = [];
-  // Assume the default row is 12 if no startRow is provided
-  let rowIndex = startRow - 1; // Convert to zero-based index
+  let rowIncrement = 300; // Y-position for the new row
+  let cumulativeEXPOS = 0; // Start at 0 for the first element in the first row
+  let ezpos = 0; // Keep track of the Z position for elements in new rows
+  const placedElements = []; // Store placed elements for overlap checking
 
-  // Fetch row data
+  // Loop through each row
+  let rowIndex = startRow - 1;
   while (rowIndex < data.length) {
     const rowData = data[rowIndex];
 
-    // Check if the first two columns are empty, if so, break the loop
+    // Check if the row is empty and break the loop
     if (!rowData[1] && !rowData[2]) {
       break;
     }
-
     // Extract values from the row using specified variables
     const position = rowData[1] || "DefaultName";
     const board_name = rowData[2] || "";
@@ -299,39 +298,34 @@ function processExcelFile(
     // Calculate EXPOS for the current element
     // Calculate the initial EXPOS for the current element
     let expos = cumulativeEXPOS;
-
-    // Adjust the position to avoid overlapping with any previous elements
     let isOverlapping = true;
     while (isOverlapping) {
       isOverlapping = false;
-
       for (const prevElement of placedElements) {
         const prevStart = prevElement.expos;
         const prevEnd = prevStart + prevElement.width;
-
-        // Check if the current element is inside the previous element
         if (expos < prevEnd && expos + width > prevStart) {
-          expos = prevEnd; // Move the current element to the right after the previous element
+          expos = prevEnd;
           isOverlapping = true;
           break;
         }
       }
     }
 
-    // Add the current element's position to the cumulativeEXPOS
-    cumulativeEXPOS = expos + parseFloat(length);
-
-    // If the cumulative EXPOS exceeds the room width (sirinaLimit)
-    let ezpos = width; // Start EZPOS from EDUBINA (element's width)
-    if (cumulativeEXPOS > sirinaLimit) {
-      expos = 0; // Reset EXPOS for a new row
-      ezpos += rowIncrement + width; // Increase EZPOS by rowIncrement (300, 600, etc.)
-      cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's length
-      rowIncrement += 300; // Increase the row increment by 300 for each new row
-    }
-
-    // Add the current element to the placedElements list to track its position and width
+    // Add the current element to placedElements for future overlap checking
     placedElements.push({ expos, width });
+
+    // Add the element's length to cumulativeEXPOS
+    cumulativeEXPOS = expos + length;
+
+    // If the cumulative width exceeds the room width (sirinaLimit), move to a new row
+    if (cumulativeEXPOS > sirinaLimit) {
+      cumulativeEXPOS = 0; // Reset cumulative EXPOX for the new row
+      expos = 0; // Reset expos for the new row
+      ezpos += rowIncrement; // Increment the Z position to create a new row
+      rowIncrement += 300; // Adjust the row height if necessary
+      placedElements.length = 0; // Reset placed elements for the new row
+    }
 
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
