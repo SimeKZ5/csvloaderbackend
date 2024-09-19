@@ -306,7 +306,8 @@ function processExcelFile(
     let expos = cumulativeEXPOS;
     cumulativeEXPOS += parseFloat(length);
 
-    let ezpos;
+    let ezpos = cumulativeEZPOS;
+    cumulativeEXPOS += parseFloat(width);
 
     // If this is the first row, use the width of each element for EZPOS
     if (isFirstRow) {
