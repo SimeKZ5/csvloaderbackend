@@ -338,6 +338,8 @@ function processExcelFile(
       rowIndex,
       "cumulativeEXPOS",
       cumulativeEXPOS,
+      "cumulativeEZPOS",
+      cumulativeEZPOS,
       "currentRowMaxWidth",
       currentRowMaxWidth
     );
