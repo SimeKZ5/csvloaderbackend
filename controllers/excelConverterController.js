@@ -307,7 +307,7 @@ function processExcelFile(
     cumulativeEXPOS += parseFloat(length);
 
     let ezpos = cumulativeEZPOS;
-    cumulativeEZPOS += parseFloat(width);
+    cumulativeEZPOS += parseFloat(width) / 10;
 
     // If this is the first row, use the width of each element for EZPOS
     if (isFirstRow) {
@@ -320,7 +320,7 @@ function processExcelFile(
     // If cumulativeEXPOS exceeds the room width (sirinaLimit), move to the next row
     if (cumulativeEXPOS > sirinaLimit) {
       expos = 0; // Reset EXPOX for a new row
-      cumulativeEZPOS += maxRowWidth + 300; // Increment EZPOS by the max row width + 300
+      cumulativeEZPOS += maxRowWidth + 300 / 10; // Increment EZPOS by the max row width + 300
       ezpos = cumulativeEZPOS; // Use the new EZPOS value for the next row
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
       maxRowWidth = currentRowMaxWidth; // Update the maxRowWidth for the new row
