@@ -237,8 +237,9 @@ function processExcelFile(
   let isFirstRow = true;
   // Fetch row data
   while (rowIndex < data.length) {
+    let currentRowMaxWidth = 0; // Reset max width for this row
     const rowData = data[rowIndex];
-    let currentRowMaxWidth = 0;
+
     // Check if the first two columns are empty, if so, break the loop
     if (!rowData[1] && !rowData[2]) {
       break;
@@ -296,6 +297,7 @@ function processExcelFile(
       noteBoth = `&quot;${note_2}&quot;`;
     }
 
+    // Update the maximum width for the current row
     if (width > currentRowMaxWidth) {
       currentRowMaxWidth = width;
     }
@@ -308,18 +310,18 @@ function processExcelFile(
 
     // If this is the first row, use the width of each element for EZPOS
     if (isFirstRow) {
-      ezpos = width; // Set EZPOS to the width of the element
+      ezpos = width; // Set EZPOS to the width of the element for the first row
     } else {
-      // For all other rows, use cumulativeEZPOS
+      // For all other rows, use the cumulative EZPOS
       ezpos = cumulativeEZPOS;
     }
 
-    // If the cumulativeEXPOS exceeds the room width (sirinaLimit)
+    // If cumulativeEXPOS exceeds the room width (sirinaLimit), move to the next row
     if (cumulativeEXPOS > sirinaLimit) {
       expos = 0; // Reset EXPOX for a new row
-      cumulativeEZPOS += maxRowWidth + rowIncrement; // Increment EZPOS by the max row width + 300
+      cumulativeEZPOS += maxRowWidth + 300; // Increment EZPOS by the max row width + 300
       ezpos = cumulativeEZPOS; // Use the new EZPOS value for the next row
-      cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX
+      cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
       maxRowWidth = currentRowMaxWidth; // Update the maxRowWidth for the new row
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
