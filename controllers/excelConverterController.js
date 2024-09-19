@@ -230,8 +230,8 @@ function processExcelFile(
 
   let cumulativeEXPOS = 0;
   let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
-  // Assume the default row is 12 if no startRow is provided
-  let rowIndex = startRow - 1; // Convert to zero-based index
+  let largestWidthBeforeMove = 0; // Track the largest width before crossing the sirinaLimit
+  let rowIndex = startRow - 1; // This will start as 300 and increase by 300 for each new row
 
   // Fetch row data
   while (rowIndex < data.length) {
@@ -294,18 +294,23 @@ function processExcelFile(
       noteBoth = `&quot;${note_2}&quot;`;
     }
 
-    // Calculate EXPOS for the current element
     let expos = cumulativeEXPOS; // Start from the current cumulative EXPOS
     cumulativeEXPOS += parseFloat(length); // Update cumulative EXPOS
 
     let ezpos = width; // Start EZPOS from EDUBINA (element's width)
 
+    // Track the largest width before needing to move
+    if (width > largestWidthBeforeMove) {
+      largestWidthBeforeMove = width;
+    }
+
     // If the cumulative EXPOS exceeds the room width (sirinaLimit)
     if (cumulativeEXPOS > sirinaLimit) {
       expos = 0; // Reset EXPOS for a new row
-      ezpos += rowIncrement + width; // Increase EZPOS by rowIncrement (300, 600, etc.)
+      ezpos += largestWidthBeforeMove + rowIncrement + width; // Increase EZPOS by largest width + 300
       cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's length
       rowIncrement += 300; // Increase the row increment by 300 for each new row
+      largestWidthBeforeMove = width; // Reset largestWidthBeforeMove to the current width
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
