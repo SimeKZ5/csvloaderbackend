@@ -308,7 +308,7 @@ function processExcelFile(
     if (cumulativeEXPOS > sirinaLimit) {
       expos = 0; // Reset EXPOS for a new row
       ezpos += largestWidthBeforeMove + rowIncrement + width; // Increase EZPOS by largest width + 300
-      cumulativeEXPOS = parseFloat(length); // Reset cumulativeEXPOS to the current element's length
+      cumulativeEXPOS = 0; //parseFloat(length); // Reset cumulativeEXPOS to the current element's length
       rowIncrement += 300; // Increase the row increment by 300 for each new row
       largestWidthBeforeMove = width; // Reset largestWidthBeforeMove to the current width
     }
