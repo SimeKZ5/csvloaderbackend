@@ -229,13 +229,11 @@ function processExcelFile(
   });
 
   let cumulativeEXPOS = 0;
-  let cumulativeEZPOS = 0;
-  let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
-  //let largestWidthBeforeMove = 0; // Track the largest width before crossing the sirinaLimit
-  let rowIndex = startRow - 1; // This will start as 300 and increase by 300 for each new row
-  let maxRowWidth = 0; // Maximum width for the current row
-  let elementRowIndex = 1;
-  let prevMaxRowWidths = [];
+  let cumulativeEZPOS = 0; // Start with 0 for the first row
+  let rowIncrement = 300; // This will be added to EZPOS for each new row
+  let rowIndex = startRow - 1; // Convert to zero-based index
+
+  let currentRowMaxWidth = 0; // Track the maximum width for the current row
   let isFirstRow = true;
   // Fetch row data
   while (rowIndex < data.length) {
@@ -308,12 +306,13 @@ function processExcelFile(
     let expos = cumulativeEXPOS;
     cumulativeEXPOS += parseFloat(length);
 
+    // Calculate EZPOS for the element
     let ezpos;
     if (isFirstRow) {
-      ezpos = width; // Use the width of each element for the first row
+      ezpos = width; // For the first row, EZPOS is just the width of each element
     } else {
-      // Sum up the maximum widths of all previous rows and add 300 for each transition
-      ezpos = prevMaxRowWidths.reduce((sum, width) => sum + width + 300, 0);
+      // For subsequent rows, add the largest width from the previous row plus 300
+      ezpos = cumulativeEZPOS + currentRowMaxWidth + 300;
     }
 
     // If cumulativeEXPOS exceeds the room width (sirinaLimit), move to the next row
@@ -321,11 +320,14 @@ function processExcelFile(
       expos = 0; // Reset EXPOX for a new row
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
 
-      // Store the largest element width of the current row for use in the next row
-      prevMaxRowWidths.push(currentRowMaxWidth);
+      // Update cumulativeEZPOS with the maximum width of the current row
+      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
 
-      elementRowIndex++; // Move to the next visual row
-      isFirstRow = false; // Ensure this only happens after the first row
+      // Reset the current row's max width for the next row
+      currentRowMaxWidth = 0;
+
+      // Set isFirstRow to false to process subsequent rows
+      isFirstRow = false;
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
@@ -344,8 +346,8 @@ function processExcelFile(
       cumulativeEZPOS,
       "currentRowMaxWidth",
       currentRowMaxWidth,
-      isFirstRow,
-      elementRowIndex
+      isFirstRow
+      //elementRowIndex
     );
     // Add a new ELEMENT to the XML for this row
     const element = xmlRoot.ele("ELEMENT", {
