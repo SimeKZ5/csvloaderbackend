@@ -307,7 +307,7 @@ function processExcelFile(
     cumulativeEXPOS += parseFloat(length);
 
     let ezpos = cumulativeEZPOS;
-    cumulativeEXPOS += parseFloat(width);
+    cumulativeEZPOS += parseFloat(width);
 
     // If this is the first row, use the width of each element for EZPOS
     if (isFirstRow) {
@@ -324,6 +324,7 @@ function processExcelFile(
       ezpos = cumulativeEZPOS; // Use the new EZPOS value for the next row
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
       maxRowWidth = currentRowMaxWidth; // Update the maxRowWidth for the new row
+      isFirstRow = false;
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
@@ -341,7 +342,8 @@ function processExcelFile(
       "cumulativeEZPOS",
       cumulativeEZPOS,
       "currentRowMaxWidth",
-      currentRowMaxWidth
+      currentRowMaxWidth,
+      isFirstRow
     );
     // Add a new ELEMENT to the XML for this row
     const element = xmlRoot.ele("ELEMENT", {
