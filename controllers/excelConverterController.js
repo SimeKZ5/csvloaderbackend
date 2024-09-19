@@ -234,7 +234,6 @@ function processExcelFile(
   let rowIndex = startRow - 1; // Convert to zero-based index
 
   let currentRowMaxWidth = 0; // Track the maximum width for the current row
-  let prevMaxRowWidth = 0; // Track the maximum width of the previous row
   let isFirstRow = true;
   let isFirstElementInNewRow = true;
 
@@ -312,14 +311,14 @@ function processExcelFile(
     // Calculate EZPOS for the element
     let ezpos;
     if (isFirstRow) {
-      ezpos = cumulativeEZPOS + width; // For the first row, EZPOS is just the width of each element
+      ezpos = width; // For the first row, EZPOS is just the width of each element
     } else {
-      // If it's the first element in the new row, use the cumulative EZPOS of the previous row plus rowIncrement
+      // If it's the first element in the new row, use the updated cumulativeEZPOS
       if (isFirstElementInNewRow) {
-        ezpos = cumulativeEZPOS + prevMaxRowWidth + rowIncrement;
+        ezpos = cumulativeEZPOS + rowIncrement;
         isFirstElementInNewRow = false; // Mark that the first element of the new row is processed
       } else {
-        // For subsequent elements, calculate based on their width
+        // For subsequent elements in the same row
         ezpos = cumulativeEZPOS + width;
       }
     }
@@ -329,19 +328,13 @@ function processExcelFile(
       expos = 0; // Reset EXPOX for a new row
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
 
-      // Update cumulativeEZPOS with the maximum width of the previous row
-      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
-
-      // Save the current row's max width as the previous row's max width for the next row
-      prevMaxRowWidth = currentRowMaxWidth;
+      // Update cumulativeEZPOS with the maximum width of the current row
+      cumulativeEZPOS += currentRowMaxWidth;
 
       // Reset the current row's max width for the next row
       currentRowMaxWidth = 0;
-
-      // Mark that the first element of the new row is being processed
       isFirstElementInNewRow = true;
-
-      // Set isFirstRow to false after the first row
+      // Set isFirstRow to false to process subsequent rows
       isFirstRow = false;
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
