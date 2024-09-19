@@ -229,14 +229,15 @@ function processExcelFile(
   });
 
   let cumulativeEXPOS = 0;
+  let cumulativeEZPOS = 0;
   let rowIncrement = 300; // This will start as 300 and increase by 300 for each new row
-  let largestWidthBeforeMove = 0; // Track the largest width before crossing the sirinaLimit
+  //let largestWidthBeforeMove = 0; // Track the largest width before crossing the sirinaLimit
   let rowIndex = startRow - 1; // This will start as 300 and increase by 300 for each new row
-
+  let maxRowWidth = 0;
   // Fetch row data
   while (rowIndex < data.length) {
     const rowData = data[rowIndex];
-
+    let currentRowMaxWidth = 0;
     // Check if the first two columns are empty, if so, break the loop
     if (!rowData[1] && !rowData[2]) {
       break;
@@ -294,29 +295,40 @@ function processExcelFile(
       noteBoth = `&quot;${note_2}&quot;`;
     }
 
-    let expos = cumulativeEXPOS; // Start from the current cumulative EXPOS
-    cumulativeEXPOS += parseFloat(length); // Update cumulative EXPOS
-
-    let ezpos = width; // Start EZPOS from EDUBINA (element's width)
-
-    // Track the largest width before needing to move
-    if (width > largestWidthBeforeMove) {
-      largestWidthBeforeMove = width;
+    // Update the maximum width for the current row
+    if (width > currentRowMaxWidth) {
+      currentRowMaxWidth = width;
     }
 
-    // If the cumulative EXPOS exceeds the room width (sirinaLimit)
+    // Calculate EXPOX and EZPOS for the element
+    let expos = cumulativeEXPOS;
+    cumulativeEXPOS += parseFloat(length);
+
+    let ezpos = cumulativeEZPOS; // Use the cumulative EZPOS for all elements in this row
+
+    // If the cumulativeEXPOS exceeds the room width (sirinaLimit)
     if (cumulativeEXPOS > sirinaLimit) {
-      expos = 0; // Reset EXPOS for a new row
-      ezpos += largestWidthBeforeMove + rowIncrement + width; // Increase EZPOS by largest width + 300
-      cumulativeEXPOS = 0; //parseFloat(length); // Reset cumulativeEXPOS to the current element's length
-      rowIncrement += 300; // Increase the row increment by 300 for each new row
-      largestWidthBeforeMove = width; // Reset largestWidthBeforeMove to the current width
+      expos = 0; // Reset EXPOX for a new row
+      cumulativeEZPOS += maxRowWidth + rowIncrement; // Increment EZPOS by the max row width + 300
+      ezpos = cumulativeEZPOS; // Use the new EZPOS value for the next row
+      cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX
+      maxRowWidth = currentRowMaxWidth; // Update the maxRowWidth for the new row
     }
+
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
     const str_2 = w_mat_1 === "" ? false : true;
     const str_3 = w_mat_2 === "" ? false : true; */
-
+    console.log(
+      "X",
+      expos,
+      "Z",
+      ezpos,
+      "RowIndex",
+      rowIndex,
+      "cumulativeEXPOS",
+      cumulativeEXPOS
+    );
     // Add a new ELEMENT to the XML for this row
     const element = xmlRoot.ele("ELEMENT", {
       ECLAS: "TElement",
