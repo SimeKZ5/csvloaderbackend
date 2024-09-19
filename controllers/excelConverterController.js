@@ -234,8 +234,10 @@ function processExcelFile(
   let rowIndex = startRow - 1; // Convert to zero-based index
 
   let currentRowMaxWidth = 0; // Track the maximum width for the current row
-  let prevRowMaxWidth = 0;
+  let prevMaxRowWidth = 0; // Track the maximum width of the previous row
   let isFirstRow = true;
+  let isFirstElementInNewRow = true;
+
   // Fetch row data
   while (rowIndex < data.length) {
     let currentRowMaxWidth = 0; // Reset max width for this row
@@ -310,27 +312,36 @@ function processExcelFile(
     // Calculate EZPOS for the element
     let ezpos;
     if (isFirstRow) {
-      ezpos = width; // For the first row, EZPOS is just the width of each element
-    } else if (expos === 0) {
-      // If it's the first element in the new row, use the largest width from the previous row
-      ezpos = prevRowMaxWidth + rowIncrement;
+      ezpos = cumulativeEZPOS + width; // For the first row, EZPOS is just the width of each element
     } else {
-      // Use cumulativeEZPOS for subsequent elements in the row
-      ezpos = cumulativeEZPOS;
+      // If it's the first element in the new row, use the cumulative EZPOS of the previous row plus rowIncrement
+      if (isFirstElementInNewRow) {
+        ezpos = cumulativeEZPOS + prevMaxRowWidth + rowIncrement;
+        isFirstElementInNewRow = false; // Mark that the first element of the new row is processed
+      } else {
+        // For subsequent elements, calculate based on their width
+        ezpos = cumulativeEZPOS + width;
+      }
     }
 
     // If cumulativeEXPOS exceeds the room width (sirinaLimit), move to the next row
     if (cumulativeEXPOS > sirinaLimit) {
       expos = 0; // Reset EXPOX for a new row
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
-      prevRowMaxWidth = currentRowMaxWidth;
-      // Update cumulativeEZPOS with the maximum width of the current row
-      cumulativeEZPOS = prevRowMaxWidth + rowIncrement;
+
+      // Update cumulativeEZPOS with the maximum width of the previous row
+      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
+
+      // Save the current row's max width as the previous row's max width for the next row
+      prevMaxRowWidth = currentRowMaxWidth;
 
       // Reset the current row's max width for the next row
       currentRowMaxWidth = 0;
 
-      // Set isFirstRow to false to process subsequent rows
+      // Mark that the first element of the new row is being processed
+      isFirstElementInNewRow = true;
+
+      // Set isFirstRow to false after the first row
       isFirstRow = false;
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
