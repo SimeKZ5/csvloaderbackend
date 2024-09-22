@@ -234,6 +234,7 @@ function processExcelFile(
   let rowIndex = startRow - 1; // Convert to zero-based index
 
   let currentRowMaxWidth = 0; // Track the maximum width for the current row
+  let numberOfRow = 0;
   let isFirstRow = true;
 
   // Fetch row data
@@ -313,11 +314,11 @@ function processExcelFile(
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
 
       // Update cumulativeEZPOS with the maximum width of the current row
-      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
+      cumulativeEZPOS += currentRowMaxWidth * 2 + rowIncrement;
 
       // Reset the current row's max width for the next row
       currentRowMaxWidth = 0;
-
+      numberOfRow++;
       // Set isFirstRow to false to process subsequent rows
       isFirstRow = false;
     }
@@ -347,7 +348,9 @@ function processExcelFile(
       cumulativeEZPOS,
       "currentRowMaxWidth",
       currentRowMaxWidth,
-      isFirstRow
+      isFirstRow,
+      "numberOfRow",
+      numberOfRow
       //elementRowIndex
     );
     // Add a new ELEMENT to the XML for this row
