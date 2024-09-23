@@ -313,8 +313,7 @@ function processExcelFile(
       expos = 0; // Reset EXPOX for a new row
       cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
 
-      // Update cumulativeEZPOS with the maximum width of the current row
-      cumulativeEZPOS += currentRowMaxWidth * 2 + rowIncrement;
+      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
 
       // Reset the current row's max width for the next row
       currentRowMaxWidth = 0;
@@ -322,18 +321,19 @@ function processExcelFile(
       // Set isFirstRow to false to process subsequent rows
       isFirstRow = false;
     }
-    /*     const str_0 = l_mat_1 === "" ? false : true;
-    const str_1 = l_mat_2 === "" ? false : true;
-    const str_2 = w_mat_1 === "" ? false : true;
-    const str_3 = w_mat_2 === "" ? false : true; */
-    // Calculate EZPOS for the element
+    // Update cumulativeEZPOS with the maximum width of the current row
     let ezpos;
     if (isFirstRow) {
       ezpos = width; // For the first row, EZPOS is just the width of each element
     } else {
       // For subsequent rows, use the updated cumulativeEZPOS
-      ezpos = cumulativeEZPOS; // Only cumulativeEZPOS, no currentRowMaxWidth
+      ezpos = cumulativeEZPOS + width; // Only cumulativeEZPOS, no currentRowMaxWidth
     }
+    /*     const str_0 = l_mat_1 === "" ? false : true;
+    const str_1 = l_mat_2 === "" ? false : true;
+    const str_2 = w_mat_1 === "" ? false : true;
+    const str_3 = w_mat_2 === "" ? false : true; */
+    // Calculate EZPOS for the element
 
     console.log(
       "X",
