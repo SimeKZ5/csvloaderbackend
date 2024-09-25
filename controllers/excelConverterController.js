@@ -327,7 +327,7 @@ function processExcelFile(
       ezpos = width; // For the first row, EZPOS is just the width of each element
     } else {
       // For subsequent rows, use the updated cumulativeEZPOS
-      ezpos = cumulativeEZPOS + width; // Only cumulativeEZPOS, no currentRowMaxWidth
+      ezpos = cumulativeEZPOS + width + rowIncrement; // Only cumulativeEZPOS, no currentRowMaxWidth
     }
     /*     const str_0 = l_mat_1 === "" ? false : true;
     const str_1 = l_mat_2 === "" ? false : true;
