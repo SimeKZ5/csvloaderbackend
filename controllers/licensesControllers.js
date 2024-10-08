@@ -69,7 +69,8 @@ const deleteLicense = async (req, res) => {
 
   try {
     const deletedLicense = await License.findOneAndDelete({
-      license: licenseKey,
+      licenseKey: licenseKey,
+      encryptedMachineId: encryptedMachineId,
     });
 
     if (!deletedLicense) {
