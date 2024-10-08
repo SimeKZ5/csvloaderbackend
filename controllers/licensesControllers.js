@@ -61,7 +61,7 @@ const createLicense = async (req, res) => {
 
 const deleteLicense = async (req, res) => {
   const { licenseKey } = req.params;
-  //const { encryptedMachineId } = req.body;
+  const { encryptedMachineId } = req.body;
 
   if (!encryptedMachineId) {
     return res.status(400).json({ message: "Missing encrypted machine ID" });
@@ -70,6 +70,7 @@ const deleteLicense = async (req, res) => {
   try {
     const deletedLicense = await License.findOneAndDelete({
       licenseKey: licenseKey,
+      encryptedMachineId: encryptedMachineId,
     });
 
     if (!deletedLicense) {
