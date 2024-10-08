@@ -1,9 +1,9 @@
 const { isAdminMachine } = require("../utils/verifyAdminUtils");
 
 const checkAdminAccess = (req, res) => {
-  const { encryptedMachineId } = req.body;
+  const encryptedMachineId = req.headers["x-encrypted-machine-id"];
 
-  console.log("Received encryptedMachineId:", encryptedMachineId);
+  console.log("Received encryptedMachineId from headers:", encryptedMachineId);
 
   if (!encryptedMachineId) {
     return res.status(400).json({ message: "No machine ID provided" });
