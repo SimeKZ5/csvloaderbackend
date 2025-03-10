@@ -25,6 +25,7 @@ app.use(express.json());
 app.use("/api/licence", require("./routes/licenseRoutes"));
 app.use("/api/korisnici", require("./routes/userRoutes"));
 app.use("/api/excel", require("./routes/excelFormatRoute"));
+app.use("/api/convert", require("./routes/convertDaskeToS3DRoute"));
 app.use("/api/admin", require("./routes/verifyAdminRoute"));
 
 const PORT = process.env.PORT || 3000;

@@ -1,45 +1,103 @@
-const XLSX = require("xlsx");
 const { create } = require("xmlbuilder2");
 const path = require("path");
 const fs = require("fs");
 
-// Define the controller function for converting Excel to .S3D
-const convertExcelToS3D = (req, res) => {
-  const file = req.file;
-  const startRow = req.body.startRow ? parseInt(req.body.startRow, 10) : 12;
+// Controller to convert JSON (userDaskeValues) to an .S3D file
+const convertDaskeValueToS3D = (req, res) => {
+  const userDaskeValues = req.body.userDaskeValues;
   const pathToKantTrake = req.body.pathToKantTrake;
-  const selectedUserValues = req.body.selectedUserValues || {};
-  console.log("selectedUserValuesselectedUserValues", selectedUserValues);
+  const userClientValues = req.body.userClientValues;
+  console.log(pathToKantTrake, userClientValues, "userClientValues");
+  if (!userDaskeValues || !Array.isArray(userDaskeValues)) {
+    console.error("Invalid userDaskeValues:", userDaskeValues);
+    return res
+      .status(400)
+      .json({ message: "Invalid or missing userDaskeValues." });
+  }
+  if (!pathToKantTrake) {
+    console.error("Invalid pathToKantTrake:", pathToKantTrake);
+    return res
+      .status(400)
+      .json({ message: "Invalid or missing pathToKantTrake." });
+  }
+
+  function parseKantTrakeFile(filePath, searchValue) {
+    console.log(filePath, searchValue);
+    try {
+      const fileContent = fs.readFileSync(filePath, "utf8");
+      console.log(`File content from ${filePath} loaded successfully.`);
+
+      const searchString = `Naziv="ABS ${searchValue} mm"`;
+
+      console.log(`Searching for string: ${searchString}`);
+
+      const match = fileContent.match(
+        new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`)
+      );
+
+      if (match) {
+        console.log(`Found match: ${match[0]}`);
+        return match[0]; // Return the entire matching string
+      }
+
+      console.log(`No match found for: ${searchString}`);
+      return null; // Return null if no match is found
+    } catch (error) {
+      console.error(`Error reading file at ${filePath}:`, error);
+      return null; // Return null if an error occurs
+    }
+  }
+
+  function findMatNameForSifra(filePath, sifra) {
+    try {
+      if (!sifra) {
+        console.log("Sifra is undefined or empty");
+        return null;
+      }
+
+      const fileContent = fs.readFileSync(filePath, "utf8");
+      console.log(`Searching for Sifra: ${sifra} in file: ${filePath}`);
+
+      // The regular expression matches the Data element with the given Sifra and extracts the MatName
+      const regex = new RegExp(
+        `<Data[^>]*Sifra="${sifra}"[^>]*MatName="([^"]+)"`,
+        "i"
+      );
+      const match = fileContent.match(regex);
+
+      if (match && match[1]) {
+        const matName = match[1];
+        console.log(`Found MatName: ${matName} for Sifra: ${sifra}`);
+        return matName;
+      } else {
+        console.log(`No MatName found for Sifra: ${sifra}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error searching for Sifra in ${filePath}:`, error);
+      return null;
+    }
+  }
   try {
-    // Parse the Kant Trake file to check for each value from 0.5 to 99
+    // Find matching values in the Kant Trake file from 0.4 to 10 (step 0.1)
     const matchingValues = [];
     for (let i = 0.4; i <= 10; i += 0.1) {
       i = Math.round(i * 10) / 10;
+
+      console.log(pathToKantTrake, i);
       if (parseKantTrakeFile(pathToKantTrake, i)) {
         matchingValues.push(i);
       }
     }
 
-    if (matchingValues.length > 0) {
-      console.log(
-        `Found matching values in Kant Trake file: ${matchingValues}`
-      );
-    } else {
-      console.log("No matching values found in Kant Trake file.");
-    }
-
-    // Your existing logic to process the Excel file
-    const xml = processExcelFile(
-      file.path,
-      startRow,
+    // Process the provided JSON data into our XML structure
+    const xml = processDaskeData(
+      userDaskeValues,
       matchingValues,
-      pathToKantTrake,
-      JSON.parse(selectedUserValues)
+      pathToKantTrake
     );
-    const outputFileName = path.basename(
-      file.originalname,
-      path.extname(file.originalname)
-    );
+
+    const outputFileName = "outputFileName"; // You might derive this from your data
     const outputPath = saveAsS3DFile(xml, outputFileName);
 
     res.download(outputPath, `${outputFileName}.S3D`, (err) => {
@@ -49,83 +107,13 @@ const convertExcelToS3D = (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Error processing file:", error);
-    res.status(500).json({ message: "Error occurred while processing file." });
+    console.error("Error processing data:", error);
+    res.status(500).json({ message: "Error occurred while processing data." });
   }
 };
 
-function parseKantTrakeFile(filePath, searchValue) {
-  try {
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    console.log(`File content from ${filePath} loaded successfully.`);
-
-    const searchString = `Naziv="ABS ${searchValue} mm"`;
-
-    console.log(`Searching for string: ${searchString}`);
-
-    const match = fileContent.match(
-      new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`)
-    );
-
-    if (match) {
-      console.log(`Found match: ${match[0]}`);
-      return match[0]; // Return the entire matching string
-    }
-
-    console.log(`No match found for: ${searchString}`);
-    return null; // Return null if no match is found
-  } catch (error) {
-    console.error(`Error reading file at ${filePath}:`, error);
-    return null; // Return null if an error occurs
-  }
-}
-
-function findMatNameForSifra(filePath, sifra) {
-  try {
-    if (!sifra) {
-      console.log("Sifra is undefined or empty");
-      return null;
-    }
-
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    console.log(`Searching for Sifra: ${sifra} in file: ${filePath}`);
-
-    // The regular expression matches the Data element with the given Sifra and extracts the MatName
-    const regex = new RegExp(
-      `<Data[^>]*Sifra="${sifra}"[^>]*MatName="([^"]+)"`,
-      "i"
-    );
-    const match = fileContent.match(regex);
-
-    if (match && match[1]) {
-      const matName = match[1];
-      console.log(`Found MatName: ${matName} for Sifra: ${sifra}`);
-      return matName;
-    } else {
-      console.log(`No MatName found for Sifra: ${sifra}`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`Error searching for Sifra in ${filePath}:`, error);
-    return null;
-  }
-}
-
-function processExcelFile(
-  filePath,
-  startRow,
-  matchingValues,
-  kantTrakePath,
-  selectedUserValues
-) {
-  //console.log("kantTrakePath:", kantTrakePath);
-  console.log("startRowstartRow", startRow);
-  const workbook = XLSX.readFile(filePath);
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-  const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-  console.log("datadatadatadata", data);
-
+// Function to process the JSON data and build the XML
+function processDaskeData(userDaskeValues, matchingValues, kantTrakePath) {
   let xmlContent = `<!-- Ver=16-->\r\n`;
 
   const xmlRoot = create().ele("PROJECTFILE", {
@@ -137,8 +125,9 @@ function processExcelFile(
     SLAG: "1",
   });
 
-  const sirina = 10; // SIRINA value in meters (as a number)
-  const sirinaLimit = sirina * 1000; // Convert SIRINA from meters to millimeters (5000 mm)
+  // Room settings
+  const sirina = 10; // meters
+  const sirinaLimit = sirina * 1000; // convert to millimeters
 
   xmlRoot.ele("SOBA", {
     SIRINA: "5",
@@ -232,167 +221,124 @@ function processExcelFile(
       '&quot;PTOCKA=0&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=0&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=1.55999994277954&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0&quot;,&quot;PTNE0=0.439999997615814&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0&quot;,&quot;PTOCKA=1&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=0&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=0.439999997615814&quot;,&quot;PTNE0=0&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=1.55999994277954&quot;,&quot;PTOCKA=2&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=1&quot;,&quot;PTDEPTH=2&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=0.439999997615814&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=2&quot;,&quot;PTNE0=1.55999994277954&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=2&quot;,&quot;PTOCKA=3&quot;,&quot;PTSTYLE=1&quot;,&quot;PTANMODE=1&quot;,&quot;PTSEGCOUNT=300&quot;,&quot;PTX=1&quot;,&quot;PTZ=2&quot;,&quot;PTDEPTH=1&quot;,&quot;PTCLEN=0&quot;,&quot;PTS=0&quot;,&quot;PTPR0=2&quot;,&quot;PTPR1=1&quot;,&quot;PTPR2=1.55999994277954&quot;,&quot;PTNE0=2&quot;,&quot;PTNE1=1&quot;,&quot;PTNE2=0.439999997615814&quot;,"',
   });
 
+  // Variables for positioning elements
   let cumulativeEXPOS = 0;
-  let cumulativeEZPOS = 0; // Start with 0 for the first row
-  let rowIncrement = 300; // This will be added to EZPOS for each new row
-  let rowIndex = startRow - 1; // Convert to zero-based index
-
-  //let currentRowMaxWidth = 0; // Track the maximum width for the current row
-  let numberOfRow = 0;
+  let cumulativeEZPOS = 0;
+  const rowIncrement = 300;
   let isFirstRow = true;
+  let currentRowMaxWidth = 0;
 
-  // Fetch row data
-  while (rowIndex < data.length) {
-    let currentRowMaxWidth = 0; // Reset max width for this row
-    const rowData = data[rowIndex];
-    console.log("selectedUserValues", selectedUserValues);
-    console.log("rowDatarowData", rowData);
-    if (!rowData[1] && !rowData[2]) {
-      break;
-    }
-    /* const position = rowData[1] || "DefaultName";
-    const board_name = rowData[2] || "";
-    // Skipping the empty column at index 3
-    const material = rowData[4] || "";
-    const th = rowData[5] || 1;
-    const length = rowData[6] || 1;
-    const width = rowData[7] || 1;
-    const pc = rowData[8] || 1;
-    const length_1 = rowData[9];
-    const length_2 = rowData[10];
-    const width_1 = rowData[11];
-    const width_2 = rowData[12];
-    const l_mat_1 = rowData[13] || "";
-    const l_mat_2 = rowData[14] || "";
-    const w_mat_1 = rowData[15] || "";
-    const w_mat_2 = rowData[16] || "";
-    const cnc_1 = rowData[17] || "";
-    const cnc_2 = rowData[18] || "";
-    const note_1 = rowData[19] || "";
-    const note_2 = rowData[20] || ""; */
+  // Process each JSON item
+  userDaskeValues.forEach((item) => {
+    // Skip if required fields are missing
+    if (!item.position || !item.board_name) return;
 
-    const position =
-      rowData[selectedUserValues["Position/Pozicija"].value] || "DefaultName";
-    const board_name =
-      rowData[selectedUserValues["BoardName/Ime ploče"].value] || "";
-    const material =
-      rowData[selectedUserValues["Material/Materijal"].value] || "";
-    const th = rowData[selectedUserValues["TH/Debljina/Thickness"].value] || 1;
-    const length = rowData[selectedUserValues["Length/Dužina"].value] || 1;
-    const width = rowData[selectedUserValues["Width/Širina"].value] || 1;
-    const pc = rowData[selectedUserValues["PC"].value] || 1;
-    const length_1 = rowData[selectedUserValues["Length1"].value];
-    const length_2 = rowData[selectedUserValues["Length2"].value];
-    const width_1 = rowData[selectedUserValues["Width1"].value];
-    const width_2 = rowData[selectedUserValues["Width2"].value];
-    const l_mat_1 = rowData[selectedUserValues["L_MAT_1"].value] || "";
-    const l_mat_2 = rowData[selectedUserValues["L_MAT_2"].value] || "";
-    const w_mat_1 = rowData[selectedUserValues["W_MAT_1"].value] || "";
-    const w_mat_2 = rowData[selectedUserValues["W_MAT_2"].value] || "";
-    const cnc_1 = rowData[selectedUserValues["CNC_1"].value] || "";
-    const cnc_2 = rowData[selectedUserValues["CNC_2"].value] || "";
-    const note_1 = rowData[selectedUserValues["Note1/Napomene1"].value] || "";
-    const note_2 = rowData[selectedUserValues["Note2/Napomene2"].value] || "";
-    console.log(`material: ${material}`);
-    console.log(`Sifra w_mat_1: ${w_mat_1}`);
-    console.log(`Sifra w_mat_2: ${w_mat_2}`);
-    console.log(`Sifra l_mat_1: ${l_mat_1}`);
-    console.log(`Sifra l_mat_2: ${l_mat_2}`);
-
-    const exactMatchLength1 = matchingValues.includes(parseFloat(length_1))
-      ? `ABS ${parseFloat(length_1)} mm`
+    // Parse numeric values
+    const lengthVal = parseFloat(item.length) || 0;
+    const widthVal = parseFloat(item.width) || 0;
+    const thVal = item.th || "1";
+    const pcVal = item.pc || "1";
+    console.log(item.length_1, matchingValues);
+    // Determine exact matches for lengths and widths
+    const exactMatchLength1 = matchingValues.includes(parseFloat(item.length_1))
+      ? `ABS ${parseFloat(item.length_1)} mm`
       : "";
-    const exactMatchLength2 = matchingValues.includes(parseFloat(length_2))
-      ? `ABS ${parseFloat(length_2)} mm`
+    const exactMatchLength2 = matchingValues.includes(parseFloat(item.length_2))
+      ? `ABS ${parseFloat(item.length_2)} mm`
       : "";
-    const exactMatchWidth1 = matchingValues.includes(parseFloat(width_1))
-      ? `ABS ${parseFloat(width_1)} mm`
+    const exactMatchWidth1 = matchingValues.includes(parseFloat(item.width_1))
+      ? `ABS ${parseFloat(item.width_1)} mm`
       : "";
-    const exactMatchWidth2 = matchingValues.includes(parseFloat(width_1))
-      ? `ABS ${parseFloat(width_2)} mm`
+    const exactMatchWidth2 = matchingValues.includes(parseFloat(item.width_2))
+      ? `ABS ${parseFloat(item.width_2)} mm`
       : "";
-    const exactMatchMathNameW1 = findMatNameForSifra(kantTrakePath, w_mat_1);
-    const exactMatchMathNameW2 = findMatNameForSifra(kantTrakePath, w_mat_2);
-    const exactMatchMathNameL1 = findMatNameForSifra(kantTrakePath, l_mat_1);
-    const exactMatchMathNameL2 = findMatNameForSifra(kantTrakePath, l_mat_2);
+    console.log(kantTrakePath, item.l_mat_1);
+    // Find material names based on provided sifre
+    const exactMatchMathNameW1 = findMatNameForSifra(
+      kantTrakePath,
+      item.w_mat_1
+    );
+    const exactMatchMathNameW2 = findMatNameForSifra(
+      kantTrakePath,
+      item.w_mat_2
+    );
+    const exactMatchMathNameL1 = findMatNameForSifra(
+      kantTrakePath,
+      item.l_mat_1
+    );
+    const exactMatchMathNameL2 = findMatNameForSifra(
+      kantTrakePath,
+      item.l_mat_2
+    );
 
-    let noteBoth = "";
-    if (note_1 && note_2) {
-      noteBoth = `&quot;${note_1}&quot;,&quot;${note_2}&quot;`;
-    } else if (note_1) {
-      noteBoth = `&quot;${note_1}&quot;`;
-    } else if (note_2) {
-      noteBoth = `&quot;${note_2}&quot;`;
-    }
-
-    // Update the maximum width for the current row
-    if (width > currentRowMaxWidth) {
-      currentRowMaxWidth = width;
-    }
-
-    // Calculate EXPOX for the element
-    let expos = cumulativeEXPOS;
-    cumulativeEXPOS += parseFloat(length);
-
-    // If cumulativeEXPOS exceeds the room width (sirinaLimit), move to the next row
-    if (cumulativeEXPOS > sirinaLimit) {
-      expos = 0; // Reset EXPOX for a new row
-      cumulativeEXPOS = parseFloat(length); // Reset cumulative EXPOX to the length of the current element
-
-      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
-
-      // Reset the current row's max width for the next row
-      currentRowMaxWidth = 0;
-      numberOfRow++;
-      // Set isFirstRow to false to process subsequent rows
-      isFirstRow = false;
-    }
-    // Update cumulativeEZPOS with the maximum width of the current row
-    let ezpos;
-    if (isFirstRow) {
-      ezpos = width; // For the first row, EZPOS is just the width of each element
-    } else {
-      // For subsequent rows, use the updated cumulativeEZPOS
-      ezpos = cumulativeEZPOS + width + rowIncrement; // Only cumulativeEZPOS, no currentRowMaxWidth
-    }
-    /*     const str_0 = l_mat_1 === "" ? false : true;
-    const str_1 = l_mat_2 === "" ? false : true;
-    const str_2 = w_mat_1 === "" ? false : true;
-    const str_3 = w_mat_2 === "" ? false : true; */
-    // Calculate EZPOS for the element
+    console.log("item.material", item.material);
 
     console.log(
-      "X",
-      expos,
-      "Z",
-      ezpos,
-      "RowIndex",
-      rowIndex,
-      "cumulativeEXPOS",
-      cumulativeEXPOS,
-      "cumulativeEZPOS",
-      cumulativeEZPOS,
-      "currentRowMaxWidth",
-      currentRowMaxWidth,
-      isFirstRow,
-      "numberOfRow",
-      numberOfRow
-      //elementRowIndex
+      "exactMatchLength1",
+      exactMatchLength1,
+      "exactMatchLength2",
+      exactMatchLength2,
+      "exactMatchWidth1",
+      exactMatchWidth1,
+      "exactMatchWidth2",
+      exactMatchWidth2,
+      "exactMatchMathNameW1",
+      exactMatchMathNameW1,
+      "exactMatchMathNameW2",
+      exactMatchMathNameW2,
+      "exactMatchMathNameL1",
+      exactMatchMathNameL1,
+      "exactMatchMathNameL2",
+      exactMatchMathNameL2
     );
-    // Add a new ELEMENT to the XML for this row
+
+    // Combine notes if provided
+    let noteBoth = "";
+    if (item.note_1 && item.note_2) {
+      noteBoth = `&quot;${item.note_1}&quot;,&quot;${item.note_2}&quot;`;
+    } else if (item.note_1) {
+      noteBoth = `&quot;${item.note_1}&quot;`;
+    } else if (item.note_2) {
+      noteBoth = `&quot;${item.note_2}&quot;`;
+    }
+
+    // Update the current row's max width if needed
+    if (widthVal > currentRowMaxWidth) {
+      currentRowMaxWidth = widthVal;
+    }
+
+    // Calculate EXPOX and update cumulative value
+    let expos = cumulativeEXPOS;
+    cumulativeEXPOS += lengthVal;
+
+    // Check if the current row exceeds the room width
+    if (cumulativeEXPOS > sirinaLimit) {
+      expos = 0;
+      cumulativeEXPOS = lengthVal;
+      cumulativeEZPOS += currentRowMaxWidth + rowIncrement;
+      currentRowMaxWidth = 0;
+      isFirstRow = false;
+    }
+
+    // Calculate EZPOS based on whether this is the first row
+    let ezpos = isFirstRow
+      ? widthVal
+      : cumulativeEZPOS + widthVal + rowIncrement;
+
+    // Create the ELEMENT node with all necessary attributes
     const element = xmlRoot.ele("ELEMENT", {
       ECLAS: "TElement",
       ELVL: "0",
       ERC: "309136",
-      ENAME: position,
+      ENAME: item.position,
       EKUT: "0",
-      EXPOX: expos.toString(), // Use the calculated EXPOX
+      EXPOX: expos.toString(),
       EYPOS: "0",
-      EZPOS: ezpos, // Use the calculated EZPOS
-      EVISINA: th,
-      EDUBINA: width,
+      EZPOS: ezpos.toString(),
+      EVISINA: thVal,
+      EDUBINA: widthVal.toString(),
       EDEBLJINA: "",
-      ESIRINA: length, // Default or calculated value
+      ESIRINA: lengthVal.toString(),
       ETIPE: "2",
       EVISIBLE: "true",
       EIMPORTNAME: "",
@@ -409,7 +355,7 @@ function processExcelFile(
       EKXF: "",
       EKYF: "",
       EKZF: "",
-      EKOL: pc,
+      EKOL: pcVal,
       EXKUT: "0",
       EZKUT: "0",
       EOPIS: "",
@@ -466,17 +412,13 @@ function processExcelFile(
       NETPRICEMAR: "0",
     });
 
-    // Add SELBOX element
+    // Append SELBOX, EVAR and EFVK nodes
     element
       .ele("SELBOX")
       .txt(
         "070D5473656C656374696F6E426F780102000602555103F0380603707473000000000000000000000000000000000000000000F1380000F2380000F3380000F4380000F5380000F6380000F7380000F8380000F9380000FA380000FB380000FC380000FD380000FE380000FF38000000390000013900000239000003390000043900000539000000"
       );
-
-    // Add EVAR element
     element.ele("EVAR", { VAR0: "" });
-
-    // Add EFVK element with FVKVAR
     const efvk = element.ele("EFVK", {
       EVARK0: "materijali,kom,1,CB_MatPrice,",
       EVARK1: "traka,kom,1,CB_EdgePrice,",
@@ -487,7 +429,6 @@ function processExcelFile(
       EVARK6: "&quot;montaza ladice&quot;,kom,CB_DrawQty,20,",
       EVARK7: "zarada,kom,1,2*(CB_MatPrice+CB_EdgePrice),",
     });
-
     efvk.ele("FVKVAR", {
       VAR0: "B=VISINA",
       VAR1: "L=ŠIRINA",
@@ -497,19 +438,18 @@ function processExcelFile(
     element.ele("SCMENU");
     element.ele("ACCGRP");
 
-    // Add DASKE element with AD child
+    // DASKE and AD with nested elements
     const daske = element.ele("DASKE", { DCOUNT: "1" });
-
     const ad = daske.ele("AD", {
-      DNAME: board_name,
+      DNAME: item.board_name,
       ROTGOD: "false",
       DKUT: "0",
       DXPOS: "0",
       DYPOS: "0",
       DZPOS: "0",
-      VISINA: length,
-      DUBINA: width,
-      DEBLJINA: th,
+      VISINA: lengthVal.toString(),
+      DUBINA: widthVal.toString(),
+      DEBLJINA: thVal,
       SMJER: "2",
       TIPDASKE: "0",
       FIXTEX: "false",
@@ -527,16 +467,16 @@ function processExcelFile(
       ZKUT: "0",
       TEXIND: "34",
       MATFOLDER: "",
-      MATNAME: material,
+      MATNAME: item.material,
       IGNOREGOD: "false",
       PRIMJEDBA: "",
-      PROGRAM: cnc_1,
+      PROGRAM: item.cnc_1,
       KXF: "",
       KYF: "",
       KZF: "",
       ARTIKL: "false",
       DSIFRA: "%NE%",
-      PROGRAM1: cnc_2,
+      PROGRAM1: item.cnc_2,
       PRIMJEDBALIST: noteBoth,
       PRDEBLJINA: "0",
       INHFR: "false",
@@ -545,19 +485,15 @@ function processExcelFile(
       PROIZVODISE: "0",
       DANCH: "7",
     });
-
-    // Add SELBOX and POTROSNI elements inside AD
     ad.ele("SELBOX").txt(
       "070D5473656C656374696F6E426F780102000602555103063906037074730000000000000000000000000000000000000000000739000008390000093900000A3900000B3900000C3900000D3900000E3900000F390000103900001139000012390000133900001439000015390000163900001739000018390000193900001A3900001B39000000"
     );
-
     const potrosni = ad.ele("POTROSNI", { COUNT: "4" });
 
-    // Add POTITEM and DEFTRITEM elements based on the conditions
     potrosni.ele("POTITEM", {
       TIP: "0",
       INDEX: "0",
-      STR0: "true",
+      STR0: exactMatchLength1 ? "true" : "false",
       STR1: "false",
       STR2: "false",
       STR3: "false",
@@ -565,10 +501,9 @@ function processExcelFile(
       NAZIV: exactMatchLength1,
       TIPD: "0",
     });
-
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
-      STR0: "true",
+      STR0: exactMatchLength1 ? "true" : "false",
       STR1: "false",
       STR2: "false",
       STR3: "false",
@@ -576,81 +511,72 @@ function processExcelFile(
       NAZIV: exactMatchLength1,
       TIPD: "0",
     });
-
     potrosni.ele("POTITEM", {
       TIP: "0",
       INDEX: "0",
       STR0: "false",
-      STR1: "true",
+      STR1: exactMatchLength2 ? "true" : "false",
       STR2: "false",
       STR3: "false",
       MATN: exactMatchMathNameL2,
       NAZIV: exactMatchLength2,
       TIPD: "0",
     });
-
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
       STR0: "false",
-      STR1: "true",
+      STR1: exactMatchLength2 ? "true" : "false",
       STR2: "false",
       STR3: "false",
       MATN: exactMatchMathNameL2,
       NAZIV: exactMatchLength2,
       TIPD: "0",
     });
-
     potrosni.ele("POTITEM", {
       TIP: "0",
       INDEX: "0",
       STR0: "false",
       STR1: "false",
-      STR2: "true",
+      STR2: exactMatchWidth1 ? "true" : "false",
       STR3: "false",
       MATN: exactMatchMathNameW1,
       NAZIV: exactMatchWidth1,
       TIPD: "0",
     });
-
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
       STR0: "false",
       STR1: "false",
-      STR2: "true",
+      STR2: exactMatchWidth1 ? "true" : "false",
       STR3: "false",
       MATN: exactMatchMathNameW1,
       NAZIV: exactMatchWidth1,
       TIPD: "0",
     });
-
     potrosni.ele("POTITEM", {
       TIP: "0",
       INDEX: "0",
       STR0: "false",
       STR1: "false",
       STR2: "false",
-      STR3: "true",
+      STR3: exactMatchWidth2 ? "true" : "false",
       MATN: exactMatchMathNameW2,
       NAZIV: exactMatchWidth2,
       TIPD: "0",
     });
-
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
       STR0: "false",
       STR1: "false",
       STR2: "false",
-      STR3: "true",
+      STR3: exactMatchWidth2 ? "true" : "false",
       MATN: exactMatchMathNameW2,
       NAZIV: exactMatchWidth2,
       TIPD: "0",
     });
+  });
 
-    // Move to the next row
-    rowIndex++;
-  }
-
-  // Add PLANES element
+  // Append the PLANES element after processing all items
   xmlRoot
     .ele("PLANES")
     .txt(
@@ -658,14 +584,39 @@ function processExcelFile(
     );
 
   const xmlString = xmlRoot.end({ prettyPrint: true, headless: true });
-
-  // Concatenate the custom comment with the generated XML content
   xmlContent += xmlString;
-
   return xmlContent;
 }
 
-// Function to save the XML as a .S3D file
+// Helper: Find material name for a given sifra in the Kant Trake file
+function findMatNameForSifra(filePath, sifra) {
+  try {
+    if (!sifra) return null;
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    const regex = new RegExp(
+      `<Data[^>]*Sifra="${sifra}"[^>]*MatName="([^"]+)"`,
+      "i"
+    );
+    const match = fileContent.match(regex);
+    return match ? match[1] : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Helper: Parse the Kant Trake file for a given search value
+function parseKantTrakeFile(filePath, searchValue) {
+  try {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    const regex = new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`);
+    const match = fileContent.match(regex);
+    return match ? match[0] : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+// Helper: Save the XML content as an .S3D file
 function saveAsS3DFile(xml, fileName) {
   const outputDir = path.join(__dirname, "..", "output");
   if (!fs.existsSync(outputDir)) {
@@ -673,21 +624,14 @@ function saveAsS3DFile(xml, fileName) {
   }
 
   const filePath = path.join(outputDir, `${fileName}.S3D`);
-
-  // Convert the XML string to use CRLF line endings
+  // Replace LF with CRLF and add BOM for UTF-8
   const xmlWithCRLF = xml.replace(/\n/g, "\r\n");
-
-  // Convert the XML string to a buffer with UTF-8 encoding
   const utf8Bom = Buffer.from([0xef, 0xbb, 0xbf]);
   const xmlBuffer = Buffer.from(xmlWithCRLF, "utf8");
-
-  // Combine the BOM and the XML data
   const outputBuffer = Buffer.concat([utf8Bom, xmlBuffer]);
 
-  // Write the buffer to the file
   fs.writeFileSync(filePath, outputBuffer);
-
   return filePath;
 }
 
-module.exports = { convertExcelToS3D };
+module.exports = { convertDaskeValueToS3D };
