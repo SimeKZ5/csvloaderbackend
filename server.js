@@ -5,6 +5,17 @@ const cors = require("cors");
 const app = express();
 
 connectDB();
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ limit: "5mb", extended: true }));
+app.use((req, res, next) => {
+  const contentLength = req.get("content-length") || 0;
+  console.log(
+    `🔍 Request Size: ${contentLength} bytes (${(contentLength / 1024).toFixed(
+      2
+    )} KB)`
+  );
+  next();
+});
 app.use(
   cors({
     origin: [

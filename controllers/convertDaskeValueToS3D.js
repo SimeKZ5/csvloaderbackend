@@ -5,20 +5,19 @@ const fs = require("fs");
 // Controller to convert JSON (userDaskeValues) to an .S3D file
 const convertDaskeValueToS3D = (req, res) => {
   const userDaskeValues = req.body.userDaskeValues;
-  const pathToKantTrake = req.body.pathToKantTrake;
-  const userClientValues = req.body.userClientValues;
-  console.log(pathToKantTrake, userClientValues, "userClientValues");
+  //const pathToKantTrake = req.body.pathToKantTrake;
+  //const userClientValues = req.body.userClientValues;
+  const kantTrakeData = req.body.kantTrakeData;
+  //console.log(kantTrakeData, userClientValues, "userClientValues");
   if (!userDaskeValues || !Array.isArray(userDaskeValues)) {
     console.error("Invalid userDaskeValues:", userDaskeValues);
     return res
       .status(400)
       .json({ message: "Invalid or missing userDaskeValues." });
   }
-  if (!pathToKantTrake) {
-    console.error("Invalid pathToKantTrake:", pathToKantTrake);
-    return res
-      .status(400)
-      .json({ message: "Invalid or missing pathToKantTrake." });
+  if (!kantTrakeData || typeof kantTrakeData !== "object") {
+    console.error("Invalid trakeData");
+    return res.status(400).json({ message: "kantTrakeData is not an object." });
   }
 
   function parseKantTrakeFile(filePath, searchValue) {
@@ -84,8 +83,8 @@ const convertDaskeValueToS3D = (req, res) => {
     for (let i = 0.4; i <= 10; i += 0.1) {
       i = Math.round(i * 10) / 10;
 
-      console.log(pathToKantTrake, i);
-      if (parseKantTrakeFile(pathToKantTrake, i)) {
+      console.log(kantTrakeData, i);
+      if (parseKantTrakeFile(kantTrakeData, i)) {
         matchingValues.push(i);
       }
     }
@@ -94,7 +93,7 @@ const convertDaskeValueToS3D = (req, res) => {
     const xml = processDaskeData(
       userDaskeValues,
       matchingValues,
-      pathToKantTrake
+      kantTrakeData
     );
 
     const outputFileName = "outputFileName"; // You might derive this from your data
@@ -113,7 +112,7 @@ const convertDaskeValueToS3D = (req, res) => {
 };
 
 // Function to process the JSON data and build the XML
-function processDaskeData(userDaskeValues, matchingValues, kantTrakePath) {
+function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
   let xmlContent = `<!-- Ver=16-->\r\n`;
 
   const xmlRoot = create().ele("PROJECTFILE", {
@@ -238,9 +237,9 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakePath) {
     const widthVal = parseFloat(item.width) || 0;
     const thVal = item.th || "1";
     const pcVal = item.pc || "1";
-    console.log(item.length_1, matchingValues);
+    //console.log(item.length_1, "matchingvalues", matchingValues);
     // Determine exact matches for lengths and widths
-    const exactMatchLength1 = matchingValues.includes(parseFloat(item.length_1))
+    /* const exactMatchLength1 = matchingValues.includes(parseFloat(item.length_1))
       ? `ABS ${parseFloat(item.length_1)} mm`
       : "";
     const exactMatchLength2 = matchingValues.includes(parseFloat(item.length_2))
@@ -251,27 +250,40 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakePath) {
       : "";
     const exactMatchWidth2 = matchingValues.includes(parseFloat(item.width_2))
       ? `ABS ${parseFloat(item.width_2)} mm`
-      : "";
-    console.log(kantTrakePath, item.l_mat_1);
+      : ""; */
+
+    const exactMatchLength1 = /* matchingValues.includes(parseFloat(item.length_1))
+      ? */ `ABS ${parseFloat(item.length_1)} mm`;
+    /* : ""; */
+    const exactMatchLength2 = /* matchingValues.includes(parseFloat(item.length_2))
+      ? */ `ABS ${parseFloat(item.length_2)} mm`;
+    /* : ""; */
+    const exactMatchWidth1 = /* matchingValues.includes(parseFloat(item.width_1))
+      ?  */ `ABS ${parseFloat(item.width_1)} mm`;
+    /* : ""; */
+    const exactMatchWidth2 = /* matchingValues.includes(parseFloat(item.width_2))
+      ? */ `ABS ${parseFloat(item.width_2)} mm`;
+    /* : ""; */
+    //console.log(kantTrakeData, item.l_mat_1);
     // Find material names based on provided sifre
     const exactMatchMathNameW1 = findMatNameForSifra(
-      kantTrakePath,
+      kantTrakeData,
       item.w_mat_1
     );
     const exactMatchMathNameW2 = findMatNameForSifra(
-      kantTrakePath,
+      kantTrakeData,
       item.w_mat_2
     );
     const exactMatchMathNameL1 = findMatNameForSifra(
-      kantTrakePath,
+      kantTrakeData,
       item.l_mat_1
     );
     const exactMatchMathNameL2 = findMatNameForSifra(
-      kantTrakePath,
+      kantTrakeData,
       item.l_mat_2
     );
 
-    console.log("item.material", item.material);
+    //console.log("item.material", item.material);
 
     console.log(
       "exactMatchLength1",
@@ -589,21 +601,23 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakePath) {
 }
 
 // Helper: Find material name for a given sifra in the Kant Trake file
-function findMatNameForSifra(filePath, sifra) {
-  try {
-    if (!sifra) return null;
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    const regex = new RegExp(
-      `<Data[^>]*Sifra="${sifra}"[^>]*MatName="([^"]+)"`,
-      "i"
-    );
-    const match = fileContent.match(regex);
-    return match ? match[1] : null;
-  } catch (error) {
-    return null;
-  }
-}
+function findMatNameForSifra(kantTrakeData, sifra) {
+  if (!sifra || !kantTrakeData) return null;
 
+  for (const fileKey in kantTrakeData) {
+    const trakeList = kantTrakeData[fileKey]; // Array of objects
+    const found = trakeList.find((traka) => traka.sifra === sifra);
+    //console.log("found", fileKey, kantTrakeData[0]);
+
+    if (found) {
+      console.log(`Found MatName: ${found.matName} for Sifra: ${sifra}`);
+      return found.matName;
+    }
+  }
+
+  console.log(`No MatName found for Sifra: ${sifra}`);
+  return null;
+}
 // Helper: Parse the Kant Trake file for a given search value
 function parseKantTrakeFile(filePath, searchValue) {
   try {
