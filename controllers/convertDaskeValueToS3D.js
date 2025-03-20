@@ -252,17 +252,21 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       ? `ABS ${parseFloat(item.width_2)} mm`
       : ""; */
 
-    const exactMatchLength1 = /* matchingValues.includes(parseFloat(item.length_1))
-      ? */ `ABS ${parseFloat(item.length_1)} mm`;
+    const exactMatchLength1 =
+      item.kant_group_l_1; /* matchingValues.includes(parseFloat(item.length_1))
+      ? */ /* `ABS ${parseFloat(item.length_1)} mm`; */
     /* : ""; */
-    const exactMatchLength2 = /* matchingValues.includes(parseFloat(item.length_2))
-      ? */ `ABS ${parseFloat(item.length_2)} mm`;
+    const exactMatchLength2 =
+      item.kant_group_l_2; /* matchingValues.includes(parseFloat(item.length_2))
+      ? */ /* `ABS ${parseFloat(item.length_2)} mm`; */
     /* : ""; */
-    const exactMatchWidth1 = /* matchingValues.includes(parseFloat(item.width_1))
-      ?  */ `ABS ${parseFloat(item.width_1)} mm`;
+    const exactMatchWidth1 =
+      item.kant_group_w_1; /* matchingValues.includes(parseFloat(item.width_1))
+      ?  */ /* `ABS ${parseFloat(item.width_1)} mm`; */
     /* : ""; */
-    const exactMatchWidth2 = /* matchingValues.includes(parseFloat(item.width_2))
-      ? */ `ABS ${parseFloat(item.width_2)} mm`;
+    const exactMatchWidth2 =
+      item.kant_group_w_2; /* matchingValues.includes(parseFloat(item.width_2))
+      ? */ /* `ABS ${parseFloat(item.width_2)} mm`; */
     /* : ""; */
     //console.log(kantTrakeData, item.l_mat_1);
     // Find material names based on provided sifre
