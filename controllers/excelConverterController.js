@@ -9,7 +9,8 @@ const convertExcelToS3D = (req, res) => {
   const startRow = req.body.startRow ? parseInt(req.body.startRow, 10) : 12;
   const pathToKantTrake = req.body.pathToKantTrake;
   const selectedUserValues = req.body.selectedUserValues || {};
-  console.log("selectedUserValuesselectedUserValues", selectedUserValues);
+  //console.log("selectedUserValuesselectedUserValues", selectedUserValues);
+  console.log(pathToKantTrake);
   try {
     // Parse the Kant Trake file to check for each value from 0.5 to 99
     const matchingValues = [];
@@ -245,7 +246,7 @@ function processExcelFile(
   while (rowIndex < data.length) {
     let currentRowMaxWidth = 0; // Reset max width for this row
     const rowData = data[rowIndex];
-    console.log("selectedUserValues", selectedUserValues);
+    //console.log("selectedUserValues", selectedUserValues);
     console.log("rowDatarowData", rowData);
     if (!rowData[1] && !rowData[2]) {
       break;
@@ -315,6 +316,8 @@ function processExcelFile(
     const exactMatchMathNameW2 = findMatNameForSifra(kantTrakePath, w_mat_2);
     const exactMatchMathNameL1 = findMatNameForSifra(kantTrakePath, l_mat_1);
     const exactMatchMathNameL2 = findMatNameForSifra(kantTrakePath, l_mat_2);
+
+    console.log("exactMatchLength1", exactMatchLength1);
 
     let noteBoth = "";
     if (note_1 && note_2) {
