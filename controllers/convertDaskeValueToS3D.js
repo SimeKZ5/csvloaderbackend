@@ -9,6 +9,7 @@ const convertDaskeValueToS3D = (req, res) => {
   //const userClientValues = req.body.userClientValues;
   const kantTrakeData = req.body.kantTrakeData;
   //console.log(kantTrakeData, userClientValues, "userClientValues");
+
   if (!userDaskeValues || !Array.isArray(userDaskeValues)) {
     console.error("Invalid userDaskeValues:", userDaskeValues);
     return res
