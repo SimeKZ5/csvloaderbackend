@@ -339,24 +339,35 @@ function processExcelFile(
     console.log(`Sifra l_mat_1: ${l_mat_1}`);
     console.log(`Sifra l_mat_2: ${l_mat_2}`);
 
-    const exactMatchLength1 = /* matchingValues.includes(parseFloat(length_1))
-      ? */ `ABS ${parseFloat(length_1)} mm`;
+    //const exactMatchLength1 = /* matchingValues.includes(parseFloat(length_1))
+    // ? */ `ABS ${parseFloat(length_1)} mm`;
     /* : ""; */
-    const exactMatchLength2 = /* matchingValues.includes(parseFloat(length_2))
-      ? */ `ABS ${parseFloat(length_2)} mm`;
+    //const exactMatchLength2 = /* matchingValues.includes(parseFloat(length_2))
+    // ? */ `ABS ${parseFloat(length_2)} mm`;
     /* : ""; */
-    const exactMatchWidth1 = /* matchingValues.includes(parseFloat(width_1))
-      ?  */ `ABS ${parseFloat(width_1)} mm`;
+    //const exactMatchWidth1 = /* matchingValues.includes(parseFloat(width_1))
+    // ?  */ `ABS ${parseFloat(width_1)} mm`;
     /* : ""; */
-    const exactMatchWidth2 = /* matchingValues.includes(parseFloat(width_1))
-      ?  */ `ABS ${parseFloat(width_2)} mm`;
+    //const exactMatchWidth2 = /* matchingValues.includes(parseFloat(width_1))
+    // ?  */ `ABS ${parseFloat(width_2)} mm`;
     /* : ""; */
+    const exactMatchLength1 = length_1;
+    const exactMatchLength2 = length_2;
+    const exactMatchWidth1 = width_1;
+    const exactMatchWidth2 = width_2;
+
     const exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, w_mat_1);
     const exactMatchMathNameW2 = findMatNameForSifra(kantTrakeData, w_mat_2);
     const exactMatchMathNameL1 = findMatNameForSifra(kantTrakeData, l_mat_1);
     const exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, l_mat_2);
 
-    console.log("exactMatchLength1", exactMatchLength1);
+    console.log(
+      "exactMatchLength1",
+      exactMatchMathNameW1 ? "true" : "false",
+      exactMatchMathNameW2 ? "true" : "false",
+      exactMatchMathNameL1 ? "true" : "false",
+      exactMatchMathNameL2 ? "true" : "false"
+    );
 
     let noteBoth = "";
     if (note_1 && note_2) {
@@ -599,7 +610,7 @@ function processExcelFile(
     potrosni.ele("POTITEM", {
       TIP: "0",
       INDEX: "0",
-      STR0: "true",
+      STR0: exactMatchLength1 ? "true" : "false",
       STR1: "false",
       STR2: "false",
       STR3: "false",
@@ -610,7 +621,7 @@ function processExcelFile(
 
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
-      STR0: "true",
+      STR0: exactMatchLength1 ? "true" : "false",
       STR1: "false",
       STR2: "false",
       STR3: "false",
@@ -623,7 +634,7 @@ function processExcelFile(
       TIP: "0",
       INDEX: "0",
       STR0: "false",
-      STR1: "true",
+      STR1: exactMatchLength2 ? "true" : "false",
       STR2: "false",
       STR3: "false",
       MATN: exactMatchMathNameL2,
@@ -634,7 +645,7 @@ function processExcelFile(
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
       STR0: "false",
-      STR1: "true",
+      STR1: exactMatchLength2 ? "true" : "false",
       STR2: "false",
       STR3: "false",
       MATN: exactMatchMathNameL2,
@@ -647,7 +658,7 @@ function processExcelFile(
       INDEX: "0",
       STR0: "false",
       STR1: "false",
-      STR2: "true",
+      STR2: exactMatchWidth1 ? "true" : "false",
       STR3: "false",
       MATN: exactMatchMathNameW1,
       NAZIV: exactMatchWidth1,
@@ -658,7 +669,7 @@ function processExcelFile(
       INDEX: "0",
       STR0: "false",
       STR1: "false",
-      STR2: "true",
+      STR2: exactMatchWidth1 ? "true" : "false",
       STR3: "false",
       MATN: exactMatchMathNameW1,
       NAZIV: exactMatchWidth1,
@@ -671,7 +682,7 @@ function processExcelFile(
       STR0: "false",
       STR1: "false",
       STR2: "false",
-      STR3: "true",
+      STR3: exactMatchWidth2 ? "true" : "false",
       MATN: exactMatchMathNameW2,
       NAZIV: exactMatchWidth2,
       TIPD: "0",
@@ -682,7 +693,7 @@ function processExcelFile(
       STR0: "false",
       STR1: "false",
       STR2: "false",
-      STR3: "true",
+      STR3: exactMatchWidth2 ? "true" : "false",
       MATN: exactMatchMathNameW2,
       NAZIV: exactMatchWidth2,
       TIPD: "0",
