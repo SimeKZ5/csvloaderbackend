@@ -3,6 +3,19 @@ const { create } = require("xmlbuilder2");
 const path = require("path");
 const fs = require("fs");
 
+function loadKantTrakeFromFile(filePath) {
+  try {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(fileContent);
+  } catch (error) {
+    console.error(
+      "Failed to read or parse kantTrakeData from file:",
+      filePath,
+      error
+    );
+    return null;
+  }
+}
 // Define the controller function for converting Excel to .S3D
 const convertExcelToS3D = (req, res) => {
   const file = req.file; // This should be defined if multer is correctly handling the file
@@ -11,12 +24,20 @@ const convertExcelToS3D = (req, res) => {
   }
 
   // ✅ Manually parse JSON fields from FormData
-  const kantTrakeData =
-    typeof req.body.kantTrakeData === "string"
-      ? JSON.parse(req.body.kantTrakeData)
-      : req.body.kantTrakeData || {};
+  let kantTrakeData;
+
+  if (req.body.pathToKantTrake) {
+    kantTrakeData = loadKantTrakeFromFile(req.body.pathToKantTrake);
+  } else {
+    kantTrakeData =
+      typeof req.body.kantTrakeData === "string"
+        ? JSON.parse(req.body.kantTrakeData)
+        : req.body.kantTrakeData || {};
+  }
+
   const selectedUserValues = JSON.parse(req.body.selectedUserValues || "{}");
   const startRow = parseInt(req.body.startRow, 10) || 12;
+
   // console.log("selectedUserValuesselectedUserValues", selectedUserValues);
 
   if (!kantTrakeData || typeof kantTrakeData !== "object") {
@@ -24,13 +45,14 @@ const convertExcelToS3D = (req, res) => {
     return res.status(400).json({ message: "kantTrakeData is not an object." });
   }
   function parseKantTrakeFile(filePath, searchValue) {
-    console.log(filePath, searchValue);
+    console.log(filePath);
+    //console.log(filePath, searchValue);
     try {
       const fileContent = fs.readFileSync(filePath, "utf8");
       console.log(`File content from ${filePath} loaded successfully.`);
 
       const searchString = `Naziv="ABS ${searchValue} mm"`;
-
+      console.log(searchValue);
       console.log(`Searching for string: ${searchString}`);
 
       const match = fileContent.match(
@@ -64,6 +86,14 @@ const convertExcelToS3D = (req, res) => {
         `Found matching values in Kant Trake file: ${matchingValues}`
       );
     } else {
+      const uniqueMatNames = [
+        ...new Set(
+          Object.values(kantTrakeData)
+            .flat()
+            .map((item) => item.group)
+        ),
+      ];
+      console.log("Unique group:", uniqueMatNames);
       console.log("No matching values found in Kant Trake file.");
     }
 
@@ -346,15 +376,67 @@ function processExcelFile(
     // ? */ `ABS ${parseFloat(length_2)} mm`;
     /* : ""; */
     //const exactMatchWidth1 = /* matchingValues.includes(parseFloat(width_1))
-    // ?  */ `ABS ${parseFloat(width_1)} mm`;
+    //?  */ `ABS ${parseFloat(width_1)} mm`;
     /* : ""; */
     //const exactMatchWidth2 = /* matchingValues.includes(parseFloat(width_1))
     // ?  */ `ABS ${parseFloat(width_2)} mm`;
     /* : ""; */
-    const exactMatchLength1 = length_1;
-    const exactMatchLength2 = length_2;
-    const exactMatchWidth1 = width_1;
-    const exactMatchWidth2 = width_2;
+
+    function normalizeMatName(name) {
+      if (!name) return "";
+
+      const match = name
+        .toLowerCase()
+        .match(/(?:abs|mm)?\s*[_\-]?\s*(\d+(\.\d+)?)/); // Match number after optional ABS/MM
+
+      return match?.[1] || "";
+    }
+
+    function findClosestKantTraka(kantTrakeData, searchValue) {
+      if (!searchValue || !kantTrakeData) return null;
+
+      const normalizedSearch = normalizeMatName(`ABS ${searchValue} mm`);
+      console.log("Looking for normalized kant traka:", normalizedSearch);
+      //console.log(kantTrakeData);
+      for (const [group, trakeList] of Object.entries(kantTrakeData)) {
+        for (const traka of trakeList) {
+          const norm = normalizeMatName(traka.group);
+          console.log(`Comparing with: ${traka.matName} -> ${norm}`);
+          if (norm === normalizedSearch) {
+            console.log(`✅ Found: ${traka.group} in group ${group}`);
+            return {
+              group,
+              original: traka.group,
+            };
+          }
+        }
+      }
+
+      console.warn(`❌ No match for kant traka: ${searchValue}`);
+      return null;
+    }
+
+    const matchedLength1 = findClosestKantTraka(kantTrakeData, length_1);
+    const matchedLength2 = findClosestKantTraka(kantTrakeData, length_2);
+    const matchedWidth1 = findClosestKantTraka(kantTrakeData, width_1);
+    const matchedWidth2 = findClosestKantTraka(kantTrakeData, width_2);
+
+    const exactMatchLength1 = matchedLength1?.original || "";
+    const exactMatchLength2 = matchedLength2?.original || "";
+    const exactMatchWidth1 = matchedWidth1?.original || "";
+    const exactMatchWidth2 = matchedWidth2?.original || "";
+
+    /* const exactMatchMathNameL1 = matchedLength1?.original
+  ? findMatNameForSifra(kantTrakeData, l_mat_1)
+  : null; */
+    /*     const exactMatchLength1 =
+      length_1 === undefined ? "" : `ABS ${parseFloat(length_1)} mm`;
+    const exactMatchLength2 =
+      length_2 === undefined ? "" : `ABS ${parseFloat(length_2)} mm`;
+    const exactMatchWidth1 =
+      width_1 === undefined ? "" : `ABS ${parseFloat(width_1)} mm`;
+    const exactMatchWidth2 =
+      width_2 === undefined ? "" : `ABS ${parseFloat(width_2)} mm`; */
 
     const exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, w_mat_1);
     const exactMatchMathNameW2 = findMatNameForSifra(kantTrakeData, w_mat_2);
@@ -362,6 +444,10 @@ function processExcelFile(
     const exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, l_mat_2);
 
     console.log(
+      exactMatchLength1,
+      exactMatchLength2,
+      exactMatchWidth1,
+      exactMatchWidth2,
       "exactMatchLength1",
       exactMatchMathNameW1 ? "true" : "false",
       exactMatchMathNameW2 ? "true" : "false",
