@@ -34,7 +34,7 @@ const convertExcelToS3D = (req, res) => {
         ? JSON.parse(req.body.kantTrakeData)
         : req.body.kantTrakeData || {};
   }
-
+  const checkedValueKantTrake = req.body.checkedValue || "false";
   const selectedUserValues = JSON.parse(req.body.selectedUserValues || "{}");
   const startRow = parseInt(req.body.startRow, 10) || 12;
 
@@ -104,7 +104,8 @@ const convertExcelToS3D = (req, res) => {
       //[],
       //pathToKantTrake,
       kantTrakeData,
-      selectedUserValues
+      selectedUserValues,
+      checkedValueKantTrake
     );
     const outputFileName = path.basename(
       file.originalname,
@@ -150,7 +151,8 @@ function processExcelFile(
   //matchingValues,
   //kantTrakePath,
   kantTrakeData,
-  selectedUserValues
+  selectedUserValues,
+  checkedValueKantTrake
 ) {
   //console.log("kantTrakePath:", kantTrakePath);
   console.log("startRowstartRow", startRow);
@@ -304,7 +306,64 @@ function processExcelFile(
     const cnc_2 = rowData[18] || "";
     const note_1 = rowData[19] || "";
     const note_2 = rowData[20] || ""; */
-    const positionIndex = selectedUserValues?.["Position/Pozicija"]?.value ?? 1;
+    function getCellValue(
+      rowData,
+      fieldKey,
+      selectedUserValues,
+      fallbackIndex = null
+    ) {
+      const column = selectedUserValues?.[fieldKey];
+
+      if (!column || typeof column.value !== "number" || column.value < 0) {
+        return fallbackIndex !== null ? rowData[fallbackIndex] : "";
+      }
+
+      return rowData[column.value] ?? "";
+    }
+
+    const position =
+      getCellValue(rowData, "Position/Pozicija", selectedUserValues, 1) ||
+      "DefaultName";
+    const board_name = getCellValue(
+      rowData,
+      "BoardName/Ime ploče",
+      selectedUserValues,
+      2
+    );
+    const material = getCellValue(
+      rowData,
+      "Material/Materijal",
+      selectedUserValues,
+      4
+    );
+    const th =
+      getCellValue(rowData, "TH/Debljina/Thickness", selectedUserValues, 5) ||
+      1;
+    const length =
+      getCellValue(rowData, "Length/Dužina", selectedUserValues, 6) || 1;
+    const width =
+      getCellValue(rowData, "Width/Širina", selectedUserValues, 7) || 1;
+    const pc = getCellValue(rowData, "PC", selectedUserValues, 8) || 1;
+    const length_1 = getCellValue(rowData, "Length1", selectedUserValues, 9);
+    const length_2 = getCellValue(rowData, "Length2", selectedUserValues, 10);
+    const width_1 = getCellValue(rowData, "Width1", selectedUserValues, 11);
+    const width_2 = getCellValue(rowData, "Width2", selectedUserValues, 12);
+    const l_mat_1 =
+      getCellValue(rowData, "L_MAT_1", selectedUserValues, 13) || "";
+    const l_mat_2 =
+      getCellValue(rowData, "L_MAT_2", selectedUserValues, 14) || "";
+    const w_mat_1 =
+      getCellValue(rowData, "W_MAT_1", selectedUserValues, 15) || "";
+    const w_mat_2 =
+      getCellValue(rowData, "W_MAT_2", selectedUserValues, 16) || "";
+    const cnc_1 = getCellValue(rowData, "CNC_1", selectedUserValues, 19) || "";
+    const cnc_2 = getCellValue(rowData, "CNC_2", selectedUserValues, 20) || "";
+    const note_1 =
+      getCellValue(rowData, "Note1/Napomene1", selectedUserValues, 21) || "";
+    const note_2 =
+      getCellValue(rowData, "Note2/Napomene2", selectedUserValues, 22) || "";
+
+    /*  const positionIndex = selectedUserValues?.["Position/Pozicija"]?.value ?? 1;
     const position = rowData?.[positionIndex] || "DefaultName";
 
     const boardNameIndex =
@@ -361,8 +420,8 @@ function processExcelFile(
     const note_1 = rowData?.[note1Index] || "";
 
     const note2Index = selectedUserValues?.["Note2/Napomene2"]?.value ?? 22;
-    const note_2 = rowData?.[note2Index] || "";
-
+    const note_2 = rowData?.[note2Index] || ""; */
+    console.log("selectedUserValues", selectedUserValues);
     console.log(`material: ${material}`);
     console.log(`Sifra w_mat_1: ${w_mat_1}`);
     console.log(`Sifra w_mat_2: ${w_mat_2}`);
@@ -401,7 +460,7 @@ function processExcelFile(
       for (const [group, trakeList] of Object.entries(kantTrakeData)) {
         for (const traka of trakeList) {
           const norm = normalizeMatName(traka.group);
-          console.log(`Comparing with: ${traka.matName} -> ${norm}`);
+          //console.log(`Comparing with: ${traka.matName} -> ${norm}`);
           if (norm === normalizedSearch) {
             console.log(`✅ Found: ${traka.group} in group ${group}`);
             return {
@@ -420,28 +479,97 @@ function processExcelFile(
     const matchedLength2 = findClosestKantTraka(kantTrakeData, length_2);
     const matchedWidth1 = findClosestKantTraka(kantTrakeData, width_1);
     const matchedWidth2 = findClosestKantTraka(kantTrakeData, width_2);
-
     const exactMatchLength1 = matchedLength1?.original || "";
     const exactMatchLength2 = matchedLength2?.original || "";
     const exactMatchWidth1 = matchedWidth1?.original || "";
     const exactMatchWidth2 = matchedWidth2?.original || "";
 
     /* const exactMatchMathNameL1 = matchedLength1?.original
-  ? findMatNameForSifra(kantTrakeData, l_mat_1)
-  : null; */
+    ? findMatNameForSifra(kantTrakeData, l_mat_1)
+    : null; */
     /*     const exactMatchLength1 =
-      length_1 === undefined ? "" : `ABS ${parseFloat(length_1)} mm`;
+    length_1 === undefined ? "" : `ABS ${parseFloat(length_1)} mm`;
     const exactMatchLength2 =
-      length_2 === undefined ? "" : `ABS ${parseFloat(length_2)} mm`;
+    length_2 === undefined ? "" : `ABS ${parseFloat(length_2)} mm`;
     const exactMatchWidth1 =
-      width_1 === undefined ? "" : `ABS ${parseFloat(width_1)} mm`;
+    width_1 === undefined ? "" : `ABS ${parseFloat(width_1)} mm`;
     const exactMatchWidth2 =
-      width_2 === undefined ? "" : `ABS ${parseFloat(width_2)} mm`; */
+    width_2 === undefined ? "" : `ABS ${parseFloat(width_2)} mm`; */
+    function findSifraFromMaterialIfUnchecked(
+      kantTrakeData,
+      groupGuess,
+      materialName
+    ) {
+      // Prefer searching in the guessed group first
+      if (groupGuess && kantTrakeData[groupGuess]) {
+        const match = kantTrakeData[groupGuess].find(
+          (traka) =>
+            traka.matName?.trim().toLowerCase() ===
+            materialName?.trim().toLowerCase()
+        );
+        if (match) {
+          console.log(`✅ Found Sifra: ${match.sifra} in group: ${groupGuess}`);
+          return match.matName;
+        }
+      }
 
-    const exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, w_mat_1);
-    const exactMatchMathNameW2 = findMatNameForSifra(kantTrakeData, w_mat_2);
-    const exactMatchMathNameL1 = findMatNameForSifra(kantTrakeData, l_mat_1);
-    const exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, l_mat_2);
+      // Fallback: search all groups if nothing found in the guessed group
+      for (const [group, trakeList] of Object.entries(kantTrakeData)) {
+        const match = trakeList.find(
+          (traka) =>
+            traka.matName?.trim().toLowerCase() ===
+            materialName?.trim().toLowerCase()
+        );
+        if (match) {
+          console.log(
+            `✅ Fallback found Sifra: ${match.sifra} in group: ${group}`
+          );
+          return match.matName;
+        }
+      }
+
+      console.warn(`❌ No Sifra found for material: ${materialName}`);
+      return null;
+    }
+
+    let exactMatchMathNameL1 = null;
+    let exactMatchMathNameL2 = null;
+    let exactMatchMathNameW1 = null;
+    let exactMatchMathNameW2 = null;
+
+    if (checkedValueKantTrake === "true") {
+      exactMatchMathNameL1 = findMatNameForSifra(kantTrakeData, l_mat_1);
+      exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, l_mat_2);
+      exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, w_mat_1);
+      exactMatchMathNameW2 = findMatNameForSifra(kantTrakeData, w_mat_2);
+    } else {
+      // Get the ABS group based on thickness values
+      const groupL1 = matchedLength1?.original;
+      const groupL2 = matchedLength2?.original;
+      const groupW1 = matchedWidth1?.original;
+      const groupW2 = matchedWidth2?.original;
+
+      exactMatchMathNameL1 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupL1,
+        material
+      );
+      exactMatchMathNameL2 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupL2,
+        material
+      );
+      exactMatchMathNameW1 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupW1,
+        material
+      );
+      exactMatchMathNameW2 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupW2,
+        material
+      );
+    }
 
     console.log(
       exactMatchLength1,
