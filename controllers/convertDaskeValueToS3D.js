@@ -1,6 +1,12 @@
 const { create } = require("xmlbuilder2");
 const path = require("path");
 const fs = require("fs");
+const {
+  normalizeMatName,
+  findClosestKantTraka,
+  findMatNameForSifra,
+  findSifraFromMaterialIfUnchecked,
+} = require("../utils/kantTrakeUtils");
 
 // Controller to convert JSON (userDaskeValues) to an .S3D file
 const convertDaskeValueToS3D = (req, res) => {
@@ -48,7 +54,7 @@ const convertDaskeValueToS3D = (req, res) => {
     }
   }
 
-  function findMatNameForSifra(filePath, sifra) {
+  /* function findMatNameForSifra(filePath, sifra) {
     try {
       if (!sifra) {
         console.log("Sifra is undefined or empty");
@@ -77,7 +83,7 @@ const convertDaskeValueToS3D = (req, res) => {
       console.error(`Error searching for Sifra in ${filePath}:`, error);
       return null;
     }
-  }
+  } */
   try {
     // Find matching values in the Kant Trake file from 0.4 to 10 (step 0.1)
     const matchingValues = [];
@@ -292,13 +298,13 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
 
     console.log(
       "exactMatchLength1",
-      exactMatchLength1,
+      exactMatchLength1 ? "true" : "false",
       "exactMatchLength2",
-      exactMatchLength2,
+      exactMatchLength2 ? "true" : "false",
       "exactMatchWidth1",
-      exactMatchWidth1,
+      exactMatchWidth1 ? "true" : "false",
       "exactMatchWidth2",
-      exactMatchWidth2,
+      exactMatchWidth2 ? "true" : "false",
       "exactMatchMathNameW1",
       exactMatchMathNameW1,
       "exactMatchMathNameW2",
@@ -506,91 +512,124 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       "070D5473656C656374696F6E426F780102000602555103063906037074730000000000000000000000000000000000000000000739000008390000093900000A3900000B3900000C3900000D3900000E3900000F390000103900001139000012390000133900001439000015390000163900001739000018390000193900001A3900001B39000000"
     );
     const potrosni = ad.ele("POTROSNI", { COUNT: "4" });
-
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: exactMatchLength1 ? "true" : "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL1,
-      NAZIV: exactMatchLength1,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: exactMatchLength1 ? "true" : "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL1,
-      NAZIV: exactMatchLength1,
-      TIPD: "0",
-    });
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: "false",
-      STR1: exactMatchLength2 ? "true" : "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL2,
-      NAZIV: exactMatchLength2,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: "false",
-      STR1: exactMatchLength2 ? "true" : "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL2,
-      NAZIV: exactMatchLength2,
-      TIPD: "0",
-    });
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: exactMatchWidth1 ? "true" : "false",
-      STR3: "false",
-      MATN: exactMatchMathNameW1,
-      NAZIV: exactMatchWidth1,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: exactMatchWidth1 ? "true" : "false",
-      STR3: "false",
-      MATN: exactMatchMathNameW1,
-      NAZIV: exactMatchWidth1,
-      TIPD: "0",
-    });
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: exactMatchWidth2 ? "true" : "false",
-      MATN: exactMatchMathNameW2,
-      NAZIV: exactMatchWidth2,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: exactMatchWidth2 ? "true" : "false",
-      MATN: exactMatchMathNameW2,
-      NAZIV: exactMatchWidth2,
-      TIPD: "0",
-    });
+    console.log(
+      "typeof exactMatchWidth1:",
+      typeof exactMatchWidth1,
+      "value:",
+      exactMatchWidth1
+    );
+    if (
+      typeof exactMatchWidth1 === "string" &&
+      exactMatchWidth1.trim() !== "" &&
+      typeof exactMatchMathNameW1 === "string" &&
+      exactMatchMathNameW1.trim() !== ""
+    ) {
+      potrosni.ele("POTITEM", {
+        TIP: "0",
+        INDEX: "0",
+        STR0: exactMatchWidth1 ? "true" : "false",
+        STR1: "false",
+        STR2: "false",
+        STR3: "false",
+        MATN: exactMatchMathNameW1,
+        NAZIV: exactMatchWidth1,
+        TIPD: "0",
+      });
+      potrosni.ele("DEFTRITEM", {
+        INDEX: "0",
+        STR0: exactMatchWidth1 ? "true" : "false",
+        STR1: "false",
+        STR2: "false",
+        STR3: "false",
+        MATN: exactMatchMathNameW1,
+        NAZIV: exactMatchWidth1,
+        TIPD: "0",
+      });
+    }
+    if (
+      typeof exactMatchWidth2 === "string" &&
+      exactMatchWidth2.trim() !== "" &&
+      typeof exactMatchMathNameW2 === "string" &&
+      exactMatchMathNameW2.trim() !== ""
+    ) {
+      potrosni.ele("POTITEM", {
+        TIP: "0",
+        INDEX: "0",
+        STR0: "false",
+        STR1: exactMatchWidth2 ? "true" : "false",
+        STR2: "false",
+        STR3: "false",
+        MATN: exactMatchMathNameW2,
+        NAZIV: exactMatchWidth2,
+        TIPD: "0",
+      });
+      potrosni.ele("DEFTRITEM", {
+        INDEX: "0",
+        STR0: "false",
+        STR1: exactMatchWidth2 ? "true" : "false",
+        STR2: "false",
+        STR3: "false",
+        MATN: exactMatchMathNameW2,
+        NAZIV: exactMatchWidth2,
+        TIPD: "0",
+      });
+    }
+    if (
+      typeof exactMatchLength1 === "string" &&
+      exactMatchLength1.trim() !== "" &&
+      typeof exactMatchMathNameL1 === "string" &&
+      exactMatchMathNameL1.trim() !== ""
+    ) {
+      potrosni.ele("POTITEM", {
+        TIP: "0",
+        INDEX: "0",
+        STR0: "false",
+        STR1: "false",
+        STR2: exactMatchLength1 ? "true" : "false",
+        STR3: "false",
+        MATN: exactMatchMathNameL1,
+        NAZIV: exactMatchLength1,
+        TIPD: "0",
+      });
+      potrosni.ele("DEFTRITEM", {
+        INDEX: "0",
+        STR0: "false",
+        STR1: "false",
+        STR2: exactMatchLength1 ? "true" : "false",
+        STR3: "false",
+        MATN: exactMatchMathNameL1,
+        NAZIV: exactMatchLength1,
+        TIPD: "0",
+      });
+    }
+    if (
+      typeof exactMatchLength2 === "string" &&
+      exactMatchLength2.trim() !== "" &&
+      typeof exactMatchMathNameL2 === "string" &&
+      exactMatchMathNameL2.trim() !== ""
+    ) {
+      potrosni.ele("POTITEM", {
+        TIP: "0",
+        INDEX: "0",
+        STR0: "false",
+        STR1: "false",
+        STR2: "false",
+        STR3: exactMatchLength2 ? "true" : "false",
+        MATN: exactMatchMathNameL2,
+        NAZIV: exactMatchLength2,
+        TIPD: "0",
+      });
+      potrosni.ele("DEFTRITEM", {
+        INDEX: "0",
+        STR0: "false",
+        STR1: "false",
+        STR2: "false",
+        STR3: exactMatchLength2 ? "true" : "false",
+        MATN: exactMatchMathNameL2,
+        NAZIV: exactMatchLength2,
+        TIPD: "0",
+      });
+    }
   });
 
   // Append the PLANES element after processing all items
@@ -606,7 +645,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
 }
 
 // Helper: Find material name for a given sifra in the Kant Trake file
-function findMatNameForSifra(kantTrakeData, sifra) {
+/* function findMatNameForSifra(kantTrakeData, sifra) {
   if (!sifra || !kantTrakeData) return null;
 
   for (const fileKey in kantTrakeData) {
@@ -622,7 +661,7 @@ function findMatNameForSifra(kantTrakeData, sifra) {
 
   console.log(`No MatName found for Sifra: ${sifra}`);
   return null;
-}
+} */
 // Helper: Parse the Kant Trake file for a given search value
 function parseKantTrakeFile(filePath, searchValue) {
   try {
