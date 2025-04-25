@@ -45,6 +45,7 @@ function findSifraFromMaterialIfUnchecked(
         traka.matName?.trim().toLowerCase() ===
         materialName?.trim().toLowerCase()
     );
+
     if (match) return match.matName;
   }
 

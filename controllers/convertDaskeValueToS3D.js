@@ -7,6 +7,7 @@ const {
   findMatNameForSifra,
   findSifraFromMaterialIfUnchecked,
 } = require("../utils/kantTrakeUtils");
+const { match } = require("assert");
 
 // Controller to convert JSON (userDaskeValues) to an .S3D file
 const convertDaskeValueToS3D = (req, res) => {
@@ -259,41 +260,77 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       ? `ABS ${parseFloat(item.width_2)} mm`
       : ""; */
 
-    const exactMatchLength1 =
-      item.kant_group_l_1; /* matchingValues.includes(parseFloat(item.length_1))
-      ? */ /* `ABS ${parseFloat(item.length_1)} mm`; */
-    /* : ""; */
-    const exactMatchLength2 =
-      item.kant_group_l_2; /* matchingValues.includes(parseFloat(item.length_2))
-      ? */ /* `ABS ${parseFloat(item.length_2)} mm`; */
-    /* : ""; */
-    const exactMatchWidth1 =
-      item.kant_group_w_1; /* matchingValues.includes(parseFloat(item.width_1))
-      ?  */ /* `ABS ${parseFloat(item.width_1)} mm`; */
-    /* : ""; */
-    const exactMatchWidth2 =
-      item.kant_group_w_2; /* matchingValues.includes(parseFloat(item.width_2))
-      ? */ /* `ABS ${parseFloat(item.width_2)} mm`; */
-    /* : ""; */
-    //console.log(kantTrakeData, item.l_mat_1);
-    // Find material names based on provided sifre
-    const exactMatchMathNameW1 = findMatNameForSifra(
+    const matchedLength1 = findClosestKantTraka(
       kantTrakeData,
-      item.w_mat_1
+      item.kant_group_l_1
     );
-    const exactMatchMathNameW2 = findMatNameForSifra(
+    const matchedLength2 = findClosestKantTraka(
       kantTrakeData,
-      item.w_mat_2
+      item.kant_group_l_2
     );
-    const exactMatchMathNameL1 = findMatNameForSifra(
+    const matchedWidth1 = findClosestKantTraka(
       kantTrakeData,
-      item.l_mat_1
+      item.kant_group_w_1
     );
-    const exactMatchMathNameL2 = findMatNameForSifra(
+    const matchedWidth2 = findClosestKantTraka(
       kantTrakeData,
-      item.l_mat_2
+      item.kant_group_w_2
     );
 
+    const exactMatchLength1 = matchedLength1?.original || "";
+    const exactMatchLength2 = matchedLength2?.original || "";
+    const exactMatchWidth1 = matchedWidth1?.original || "";
+    const exactMatchWidth2 = matchedWidth2?.original || "";
+
+    function fallbackFindMaterial(kantTrakeData, groupGuess, material) {
+      let result = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupGuess,
+        material
+      );
+      if (!result) {
+        for (const list of Object.values(kantTrakeData)) {
+          const match = list.find(
+            (traka) =>
+              traka.matName?.trim().toLowerCase() ===
+              material?.trim().toLowerCase()
+          );
+          if (match) return match.matName;
+        }
+      }
+      return result || material;
+    }
+    // Find material names based on provided sifre
+    let exactMatchMathNameL1 = null;
+    let exactMatchMathNameL2 = null;
+    let exactMatchMathNameW1 = null;
+    let exactMatchMathNameW2 = null;
+    const checkedValueKantTrake = "false";
+    if (checkedValueKantTrake === "true") {
+      exactMatchMathNameL1 = findMatNameForSifra(kantTrakeData, item.l_mat_1);
+      exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, item.l_mat_2);
+      exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, item.w_mat_1);
+      exactMatchMathNameW2 = findMatNameForSifra(kantTrakeData, item.w_mat_2);
+    } else {
+      // Get the ABS group based on thickness values
+      const groupL1 = matchedLength1?.original;
+      const groupL2 = matchedLength2?.original;
+      const groupW1 = matchedWidth1?.original;
+      const groupW2 = matchedWidth2?.original;
+
+      exactMatchMathNameL1 = exactMatchLength1
+        ? findMatNameForSifra(kantTrakeData, item.l_mat_1)
+        : fallbackFindMaterial(kantTrakeData, groupL1, item.material);
+      exactMatchMathNameL2 = exactMatchLength2
+        ? findMatNameForSifra(kantTrakeData, item.l_mat_2)
+        : fallbackFindMaterial(kantTrakeData, groupL2, item.material);
+      exactMatchMathNameW1 = exactMatchWidth1
+        ? findMatNameForSifra(kantTrakeData, item.w_mat_1)
+        : fallbackFindMaterial(kantTrakeData, groupW1, item.material);
+      exactMatchMathNameW2 = exactMatchWidth2
+        ? findMatNameForSifra(kantTrakeData, item.w_mat_2)
+        : fallbackFindMaterial(kantTrakeData, groupW2, item.material);
+    }
     //console.log("item.material", item.material);
 
     console.log(
@@ -516,7 +553,9 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       "typeof exactMatchWidth1:",
       typeof exactMatchWidth1,
       "value:",
-      exactMatchWidth1
+      exactMatchWidth1,
+      typeof exactMatchMathNameW1 === "string",
+      exactMatchMathNameW1
     );
     if (
       typeof exactMatchWidth1 === "string" &&
