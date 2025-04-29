@@ -15,6 +15,8 @@ const convertDaskeValueToS3D = (req, res) => {
   //const pathToKantTrake = req.body.pathToKantTrake;
   //const userClientValues = req.body.userClientValues;
   const kantTrakeData = req.body.kantTrakeData;
+  const checkedValue = req.body.checkedValue ?? false;
+  const checkedValueKT = req.body.checkedValueKT ?? true;
   //console.log(kantTrakeData, userClientValues, "userClientValues");
 
   if (!userDaskeValues || !Array.isArray(userDaskeValues)) {
@@ -101,7 +103,9 @@ const convertDaskeValueToS3D = (req, res) => {
     const xml = processDaskeData(
       userDaskeValues,
       matchingValues,
-      kantTrakeData
+      kantTrakeData,
+      checkedValue,
+      checkedValueKT
     );
 
     const outputFileName = "outputFileName"; // You might derive this from your data
@@ -120,7 +124,13 @@ const convertDaskeValueToS3D = (req, res) => {
 };
 
 // Function to process the JSON data and build the XML
-function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
+function processDaskeData(
+  userDaskeValues,
+  matchingValues,
+  kantTrakeData,
+  checkedValue,
+  checkedValueKT
+) {
   let xmlContent = `<!-- Ver=16-->\r\n`;
 
   const xmlRoot = create().ele("PROJECTFILE", {
@@ -132,12 +142,22 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     SLAG: "1",
   });
 
+  /*   let roomLength = 5;
+
+  const totalLength = userDaskeValues.reduce(
+    (sum, { width }) => sum + (+width || 0),
+    0
+  ); */
+
   // Room settings
   const sirina = 10; // meters
   const sirinaLimit = sirina * 1000; // convert to millimeters
+  /*   if (totalLength / 1000 > roomLength) {
+    roomLength = totalLength / 1000 + 1;
+  } */
 
   xmlRoot.ele("SOBA", {
-    SIRINA: "5",
+    SIRINA: "6",
     DUZINA: sirina.toString(),
     VISINA: "1.20000004768372",
     VISINALOW: "1.39999997615814",
@@ -305,8 +325,8 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     let exactMatchMathNameL2 = null;
     let exactMatchMathNameW1 = null;
     let exactMatchMathNameW2 = null;
-    const checkedValueKantTrake = "false";
-    if (checkedValueKantTrake === "true") {
+    const checkedValueKantTrake = checkedValue;
+    if (checkedValueKantTrake) {
       exactMatchMathNameL1 = findMatNameForSifra(kantTrakeData, item.l_mat_1);
       exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, item.l_mat_2);
       exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, item.w_mat_1);
@@ -548,6 +568,12 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     ad.ele("SELBOX").txt(
       "070D5473656C656374696F6E426F780102000602555103063906037074730000000000000000000000000000000000000000000739000008390000093900000A3900000B3900000C3900000D3900000E3900000F390000103900001139000012390000133900001439000015390000163900001739000018390000193900001A3900001B39000000"
     );
+    const ignoreKantTrakeCompletly = checkedValueKT;
+    console.log("ignoreKantTrakeCompletly", !ignoreKantTrakeCompletly);
+    const hasGroupValue = (v) =>
+      v !== undefined && v !== null && String(v).trim() !== "";
+
+    console.log(hasGroupValue(item.kant_group_l_1));
     const potrosni = ad.ele("POTROSNI", { COUNT: "4" });
     console.log(
       "typeof exactMatchWidth1:",
@@ -557,117 +583,215 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       typeof exactMatchMathNameW1 === "string",
       exactMatchMathNameW1
     );
-    if (
-      typeof exactMatchWidth1 === "string" &&
-      exactMatchWidth1.trim() !== "" &&
-      typeof exactMatchMathNameW1 === "string" &&
-      exactMatchMathNameW1.trim() !== ""
-    ) {
-      potrosni.ele("POTITEM", {
-        TIP: "0",
-        INDEX: "0",
-        STR0: exactMatchWidth1 ? "true" : "false",
-        STR1: "false",
-        STR2: "false",
-        STR3: "false",
-        MATN: exactMatchMathNameW1,
-        NAZIV: exactMatchWidth1,
-        TIPD: "0",
-      });
-      potrosni.ele("DEFTRITEM", {
-        INDEX: "0",
-        STR0: exactMatchWidth1 ? "true" : "false",
-        STR1: "false",
-        STR2: "false",
-        STR3: "false",
-        MATN: exactMatchMathNameW1,
-        NAZIV: exactMatchWidth1,
-        TIPD: "0",
-      });
-    }
-    if (
-      typeof exactMatchWidth2 === "string" &&
-      exactMatchWidth2.trim() !== "" &&
-      typeof exactMatchMathNameW2 === "string" &&
-      exactMatchMathNameW2.trim() !== ""
-    ) {
-      potrosni.ele("POTITEM", {
-        TIP: "0",
-        INDEX: "0",
-        STR0: "false",
-        STR1: exactMatchWidth2 ? "true" : "false",
-        STR2: "false",
-        STR3: "false",
-        MATN: exactMatchMathNameW2,
-        NAZIV: exactMatchWidth2,
-        TIPD: "0",
-      });
-      potrosni.ele("DEFTRITEM", {
-        INDEX: "0",
-        STR0: "false",
-        STR1: exactMatchWidth2 ? "true" : "false",
-        STR2: "false",
-        STR3: "false",
-        MATN: exactMatchMathNameW2,
-        NAZIV: exactMatchWidth2,
-        TIPD: "0",
-      });
-    }
-    if (
-      typeof exactMatchLength1 === "string" &&
-      exactMatchLength1.trim() !== "" &&
-      typeof exactMatchMathNameL1 === "string" &&
-      exactMatchMathNameL1.trim() !== ""
-    ) {
-      potrosni.ele("POTITEM", {
-        TIP: "0",
-        INDEX: "0",
-        STR0: "false",
-        STR1: "false",
-        STR2: exactMatchLength1 ? "true" : "false",
-        STR3: "false",
-        MATN: exactMatchMathNameL1,
-        NAZIV: exactMatchLength1,
-        TIPD: "0",
-      });
-      potrosni.ele("DEFTRITEM", {
-        INDEX: "0",
-        STR0: "false",
-        STR1: "false",
-        STR2: exactMatchLength1 ? "true" : "false",
-        STR3: "false",
-        MATN: exactMatchMathNameL1,
-        NAZIV: exactMatchLength1,
-        TIPD: "0",
-      });
-    }
-    if (
-      typeof exactMatchLength2 === "string" &&
-      exactMatchLength2.trim() !== "" &&
-      typeof exactMatchMathNameL2 === "string" &&
-      exactMatchMathNameL2.trim() !== ""
-    ) {
-      potrosni.ele("POTITEM", {
-        TIP: "0",
-        INDEX: "0",
-        STR0: "false",
-        STR1: "false",
-        STR2: "false",
-        STR3: exactMatchLength2 ? "true" : "false",
-        MATN: exactMatchMathNameL2,
-        NAZIV: exactMatchLength2,
-        TIPD: "0",
-      });
-      potrosni.ele("DEFTRITEM", {
-        INDEX: "0",
-        STR0: "false",
-        STR1: "false",
-        STR2: "false",
-        STR3: exactMatchLength2 ? "true" : "false",
-        MATN: exactMatchMathNameL2,
-        NAZIV: exactMatchLength2,
-        TIPD: "0",
-      });
+    if (!ignoreKantTrakeCompletly) {
+      if (
+        typeof exactMatchWidth1 === "string" &&
+        exactMatchWidth1.trim() !== "" &&
+        typeof exactMatchMathNameW1 === "string" &&
+        exactMatchMathNameW1.trim() !== ""
+      ) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: exactMatchWidth1 ? "true" : "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: "false",
+          MATN: exactMatchMathNameW1,
+          NAZIV: exactMatchWidth1,
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: exactMatchWidth1 ? "true" : "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: "false",
+          MATN: exactMatchMathNameW1,
+          NAZIV: exactMatchWidth1,
+          TIPD: "0",
+        });
+      }
+      if (
+        typeof exactMatchWidth2 === "string" &&
+        exactMatchWidth2.trim() !== "" &&
+        typeof exactMatchMathNameW2 === "string" &&
+        exactMatchMathNameW2.trim() !== ""
+      ) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: exactMatchWidth2 ? "true" : "false",
+          STR2: "false",
+          STR3: "false",
+          MATN: exactMatchMathNameW2,
+          NAZIV: exactMatchWidth2,
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: exactMatchWidth2 ? "true" : "false",
+          STR2: "false",
+          STR3: "false",
+          MATN: exactMatchMathNameW2,
+          NAZIV: exactMatchWidth2,
+          TIPD: "0",
+        });
+      }
+      if (
+        typeof exactMatchLength1 === "string" &&
+        exactMatchLength1.trim() !== "" &&
+        typeof exactMatchMathNameL1 === "string" &&
+        exactMatchMathNameL1.trim() !== ""
+      ) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: exactMatchLength1 ? "true" : "false",
+          STR3: "false",
+          MATN: exactMatchMathNameL1,
+          NAZIV: exactMatchLength1,
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: exactMatchLength1 ? "true" : "false",
+          STR3: "false",
+          MATN: exactMatchMathNameL1,
+          NAZIV: exactMatchLength1,
+          TIPD: "0",
+        });
+      }
+      if (
+        typeof exactMatchLength2 === "string" &&
+        exactMatchLength2.trim() !== "" &&
+        typeof exactMatchMathNameL2 === "string" &&
+        exactMatchMathNameL2.trim() !== ""
+      ) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: exactMatchLength2 ? "true" : "false",
+          MATN: exactMatchMathNameL2,
+          NAZIV: exactMatchLength2,
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: exactMatchLength2 ? "true" : "false",
+          MATN: exactMatchMathNameL2,
+          NAZIV: exactMatchLength2,
+          TIPD: "0",
+        });
+      }
+    } else {
+      if (hasGroupValue(item.kant_group_w_1)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "true",
+          STR1: "false",
+          STR2: "false",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "true",
+          STR1: "false",
+          STR2: "false",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
+
+      if (hasGroupValue(item.kant_group_w_2)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "true",
+          STR2: "false",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "true",
+          STR2: "false",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
+
+      if (hasGroupValue(item.kant_group_l_1)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "true",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "true",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
+
+      if (hasGroupValue(item.kant_group_l_2)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: "true",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: "true",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
     }
   });
 
