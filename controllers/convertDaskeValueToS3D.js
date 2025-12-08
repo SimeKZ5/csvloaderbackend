@@ -9,6 +9,7 @@ const convertDaskeValueToS3D = (req, res) => {
   //const userClientValues = req.body.userClientValues;
   const kantTrakeData = req.body.kantTrakeData;
   //console.log(kantTrakeData, userClientValues, "userClientValues");
+
   if (!userDaskeValues || !Array.isArray(userDaskeValues)) {
     console.error("Invalid userDaskeValues:", userDaskeValues);
     return res
@@ -33,7 +34,7 @@ const convertDaskeValueToS3D = (req, res) => {
       const match = fileContent.match(
         new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`)
       );
-
+      console.log(`Match found: ${match[0]}`);
       if (match) {
         console.log(`Found match: ${match[0]}`);
         return match[0]; // Return the entire matching string
@@ -83,7 +84,7 @@ const convertDaskeValueToS3D = (req, res) => {
     for (let i = 0.4; i <= 10; i += 0.1) {
       i = Math.round(i * 10) / 10;
 
-      console.log(kantTrakeData, i);
+      //console.log(kantTrakeData, i);
       if (parseKantTrakeFile(kantTrakeData, i)) {
         matchingValues.push(i);
       }

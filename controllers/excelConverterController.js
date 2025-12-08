@@ -3,20 +3,80 @@ const { create } = require("xmlbuilder2");
 const path = require("path");
 const fs = require("fs");
 
+function loadKantTrakeFromFile(filePath) {
+  try {
+    const fileContent = fs.readFileSync(filePath, "utf8");
+    return JSON.parse(fileContent);
+  } catch (error) {
+    console.error(
+      "Failed to read or parse kantTrakeData from file:",
+      filePath,
+      error
+    );
+    return null;
+  }
+}
 // Define the controller function for converting Excel to .S3D
 const convertExcelToS3D = (req, res) => {
-  const file = req.file;
-  const startRow = req.body.startRow ? parseInt(req.body.startRow, 10) : 12;
-  const pathToKantTrake = req.body.pathToKantTrake;
-  const selectedUserValues = req.body.selectedUserValues || {};
-  //console.log("selectedUserValuesselectedUserValues", selectedUserValues);
-  console.log(pathToKantTrake);
+  const file = req.file; // This should be defined if multer is correctly handling the file
+  if (!file) {
+    return res.status(400).json({ message: "No file uploaded." });
+  }
+
+  // ✅ Manually parse JSON fields from FormData
+  let kantTrakeData;
+
+  if (req.body.pathToKantTrake) {
+    kantTrakeData = loadKantTrakeFromFile(req.body.pathToKantTrake);
+  } else {
+    kantTrakeData =
+      typeof req.body.kantTrakeData === "string"
+        ? JSON.parse(req.body.kantTrakeData)
+        : req.body.kantTrakeData || {};
+  }
+  const checkedValueKantTrake = req.body.checkedValue || "false";
+  const selectedUserValues = JSON.parse(req.body.selectedUserValues || "{}");
+  const startRow = parseInt(req.body.startRow, 10) || 12;
+
+  // console.log("selectedUserValuesselectedUserValues", selectedUserValues);
+
+  if (!kantTrakeData || typeof kantTrakeData !== "object") {
+    console.error("Invalid trakeData");
+    return res.status(400).json({ message: "kantTrakeData is not an object." });
+  }
+  function parseKantTrakeFile(filePath, searchValue) {
+    console.log(filePath);
+    //console.log(filePath, searchValue);
+    try {
+      const fileContent = fs.readFileSync(filePath, "utf8");
+      console.log(`File content from ${filePath} loaded successfully.`);
+
+      const searchString = `Naziv="ABS ${searchValue} mm"`;
+      console.log(searchValue);
+      console.log(`Searching for string: ${searchString}`);
+
+      const match = fileContent.match(
+        new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`)
+      );
+
+      if (match) {
+        console.log(`Found match: ${match[0]}`);
+        return match[0]; // Return the entire matching string
+      }
+
+      console.log(`No match found for: ${searchString}`);
+      return null; // Return null if no match is found
+    } catch (error) {
+      console.error(`Error reading file at ${filePath}:`, error);
+      return null; // Return null if an error occurs
+    }
+  }
   try {
     // Parse the Kant Trake file to check for each value from 0.5 to 99
     const matchingValues = [];
     for (let i = 0.4; i <= 10; i += 0.1) {
       i = Math.round(i * 10) / 10;
-      if (parseKantTrakeFile(pathToKantTrake, i)) {
+      if (parseKantTrakeFile(kantTrakeData, i)) {
         matchingValues.push(i);
       }
     }
@@ -26,6 +86,14 @@ const convertExcelToS3D = (req, res) => {
         `Found matching values in Kant Trake file: ${matchingValues}`
       );
     } else {
+      const uniqueMatNames = [
+        ...new Set(
+          Object.values(kantTrakeData)
+            .flat()
+            .map((item) => item.group)
+        ),
+      ];
+      console.log("Unique group:", uniqueMatNames);
       console.log("No matching values found in Kant Trake file.");
     }
 
@@ -33,9 +101,11 @@ const convertExcelToS3D = (req, res) => {
     const xml = processExcelFile(
       file.path,
       startRow,
-      matchingValues,
-      pathToKantTrake,
-      JSON.parse(selectedUserValues)
+      //[],
+      //pathToKantTrake,
+      kantTrakeData,
+      selectedUserValues,
+      checkedValueKantTrake
     );
     const outputFileName = path.basename(
       file.originalname,
@@ -50,74 +120,39 @@ const convertExcelToS3D = (req, res) => {
       }
     });
   } catch (error) {
+    console.log("selectedUserValues", selectedUserValues);
     console.error("Error processing file:", error);
     res.status(500).json({ message: "Error occurred while processing file." });
   }
 };
 
-function parseKantTrakeFile(filePath, searchValue) {
-  try {
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    console.log(`File content from ${filePath} loaded successfully.`);
+// ✅ Function to find MatName based on Sifra in kantTrakeData
+function findMatNameForSifra(kantTrakeData, sifra) {
+  if (!sifra || !kantTrakeData) return null;
 
-    const searchString = `Naziv="ABS ${searchValue} mm"`;
+  for (const fileKey in kantTrakeData) {
+    const trakeList = kantTrakeData[fileKey]; // Array of objects
+    const found = trakeList.find((traka) => traka.sifra === sifra);
+    //console.log("found", fileKey, kantTrakeData[0]);
 
-    console.log(`Searching for string: ${searchString}`);
-
-    const match = fileContent.match(
-      new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`)
-    );
-
-    if (match) {
-      console.log(`Found match: ${match[0]}`);
-      return match[0]; // Return the entire matching string
+    if (found) {
+      console.log(`Found MatName: ${found.matName} for Sifra: ${sifra}`);
+      return found.matName;
     }
-
-    console.log(`No match found for: ${searchString}`);
-    return null; // Return null if no match is found
-  } catch (error) {
-    console.error(`Error reading file at ${filePath}:`, error);
-    return null; // Return null if an error occurs
   }
-}
 
-function findMatNameForSifra(filePath, sifra) {
-  try {
-    if (!sifra) {
-      console.log("Sifra is undefined or empty");
-      return null;
-    }
-
-    const fileContent = fs.readFileSync(filePath, "utf8");
-    console.log(`Searching for Sifra: ${sifra} in file: ${filePath}`);
-
-    // The regular expression matches the Data element with the given Sifra and extracts the MatName
-    const regex = new RegExp(
-      `<Data[^>]*Sifra="${sifra}"[^>]*MatName="([^"]+)"`,
-      "i"
-    );
-    const match = fileContent.match(regex);
-
-    if (match && match[1]) {
-      const matName = match[1];
-      console.log(`Found MatName: ${matName} for Sifra: ${sifra}`);
-      return matName;
-    } else {
-      console.log(`No MatName found for Sifra: ${sifra}`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`Error searching for Sifra in ${filePath}:`, error);
-    return null;
-  }
+  console.log(`No MatName found for Sifra: ${sifra}`);
+  return null;
 }
 
 function processExcelFile(
   filePath,
   startRow,
-  matchingValues,
-  kantTrakePath,
-  selectedUserValues
+  //matchingValues,
+  //kantTrakePath,
+  kantTrakeData,
+  selectedUserValues,
+  checkedValueKantTrake
 ) {
   //console.log("kantTrakePath:", kantTrakePath);
   console.log("startRowstartRow", startRow);
@@ -125,7 +160,7 @@ function processExcelFile(
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
   const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-  console.log("datadatadatadata", data);
+  //console.log("datadatadatadata", data);
 
   let xmlContent = `<!-- Ver=16-->\r\n`;
 
@@ -241,7 +276,7 @@ function processExcelFile(
   //let currentRowMaxWidth = 0; // Track the maximum width for the current row
   let numberOfRow = 0;
   let isFirstRow = true;
-
+  console.log("rowIndex", rowIndex);
   // Fetch row data
   while (rowIndex < data.length) {
     let currentRowMaxWidth = 0; // Reset max width for this row
@@ -271,53 +306,282 @@ function processExcelFile(
     const cnc_2 = rowData[18] || "";
     const note_1 = rowData[19] || "";
     const note_2 = rowData[20] || ""; */
+    function getCellValue(
+      rowData,
+      fieldKey,
+      selectedUserValues,
+      fallbackIndex = null
+    ) {
+      const column = selectedUserValues?.[fieldKey];
+
+      if (!column || typeof column.value !== "number" || column.value < 0) {
+        return fallbackIndex !== null ? rowData[fallbackIndex] : "";
+      }
+
+      return rowData[column.value] ?? "";
+    }
 
     const position =
-      rowData[selectedUserValues["Position/Pozicija"].value] || "DefaultName";
-    const board_name =
-      rowData[selectedUserValues["BoardName/Ime ploče"].value] || "";
-    const material =
-      rowData[selectedUserValues["Material/Materijal"].value] || "";
-    const th = rowData[selectedUserValues["TH/Debljina/Thickness"].value] || 1;
-    const length = rowData[selectedUserValues["Length/Dužina"].value] || 1;
-    const width = rowData[selectedUserValues["Width/Širina"].value] || 1;
-    const pc = rowData[selectedUserValues["PC"].value] || 1;
-    const length_1 = rowData[selectedUserValues["Length1"].value];
-    const length_2 = rowData[selectedUserValues["Length2"].value];
-    const width_1 = rowData[selectedUserValues["Width1"].value];
-    const width_2 = rowData[selectedUserValues["Width2"].value];
-    const l_mat_1 = rowData[selectedUserValues["L_MAT_1"].value] || "";
-    const l_mat_2 = rowData[selectedUserValues["L_MAT_2"].value] || "";
-    const w_mat_1 = rowData[selectedUserValues["W_MAT_1"].value] || "";
-    const w_mat_2 = rowData[selectedUserValues["W_MAT_2"].value] || "";
-    const cnc_1 = rowData[selectedUserValues["CNC_1"].value] || "";
-    const cnc_2 = rowData[selectedUserValues["CNC_2"].value] || "";
-    const note_1 = rowData[selectedUserValues["Note1/Napomene1"].value] || "";
-    const note_2 = rowData[selectedUserValues["Note2/Napomene2"].value] || "";
+      getCellValue(rowData, "Position/Pozicija", selectedUserValues, 1) ||
+      "DefaultName";
+    const board_name = getCellValue(
+      rowData,
+      "BoardName/Ime ploče",
+      selectedUserValues,
+      2
+    );
+    const material = getCellValue(
+      rowData,
+      "Material/Materijal",
+      selectedUserValues,
+      4
+    );
+    const th =
+      getCellValue(rowData, "TH/Debljina/Thickness", selectedUserValues, 5) ||
+      1;
+    const length =
+      getCellValue(rowData, "Length/Dužina", selectedUserValues, 6) || 1;
+    const width =
+      getCellValue(rowData, "Width/Širina", selectedUserValues, 7) || 1;
+    const pc = getCellValue(rowData, "PC", selectedUserValues, 8) || 1;
+    const length_1 = getCellValue(rowData, "Length1", selectedUserValues, 9);
+    const length_2 = getCellValue(rowData, "Length2", selectedUserValues, 10);
+    const width_1 = getCellValue(rowData, "Width1", selectedUserValues, 11);
+    const width_2 = getCellValue(rowData, "Width2", selectedUserValues, 12);
+    const l_mat_1 =
+      getCellValue(rowData, "L_MAT_1", selectedUserValues, 13) || "";
+    const l_mat_2 =
+      getCellValue(rowData, "L_MAT_2", selectedUserValues, 14) || "";
+    const w_mat_1 =
+      getCellValue(rowData, "W_MAT_1", selectedUserValues, 15) || "";
+    const w_mat_2 =
+      getCellValue(rowData, "W_MAT_2", selectedUserValues, 16) || "";
+    const cnc_1 = getCellValue(rowData, "CNC_1", selectedUserValues, 19) || "";
+    const cnc_2 = getCellValue(rowData, "CNC_2", selectedUserValues, 20) || "";
+    const note_1 =
+      getCellValue(rowData, "Note1/Napomene1", selectedUserValues, 21) || "";
+    const note_2 =
+      getCellValue(rowData, "Note2/Napomene2", selectedUserValues, 22) || "";
+
+    /*  const positionIndex = selectedUserValues?.["Position/Pozicija"]?.value ?? 1;
+    const position = rowData?.[positionIndex] || "DefaultName";
+
+    const boardNameIndex =
+      selectedUserValues?.["BoardName/Ime ploče"]?.value ?? 2;
+    const board_name = rowData?.[boardNameIndex] || "";
+
+    const materialIndex =
+      selectedUserValues?.["Material/Materijal"]?.value ?? 4;
+    const material = rowData?.[materialIndex] || "";
+
+    const thIndex = selectedUserValues?.["TH/Debljina/Thickness"]?.value ?? 5;
+    const th = rowData?.[thIndex] || 1;
+
+    const lengthIndex = selectedUserValues?.["Length/Dužina"]?.value ?? 6;
+    const length = rowData?.[lengthIndex] || 1;
+
+    const widthIndex = selectedUserValues?.["Width/Širina"]?.value ?? 7;
+    const width = rowData?.[widthIndex] || 1;
+
+    const pcIndex = selectedUserValues?.["PC"]?.value ?? 8;
+    const pc = rowData?.[pcIndex] || 1;
+
+    const length1Index = selectedUserValues?.["Length1"]?.value ?? 9;
+    const length_1 = rowData?.[length1Index];
+
+    const length2Index = selectedUserValues?.["Length2"]?.value ?? 10;
+    const length_2 = rowData?.[length2Index];
+
+    const width1Index = selectedUserValues?.["Width1"]?.value ?? 11;
+    const width_1 = rowData?.[width1Index];
+
+    const width2Index = selectedUserValues?.["Width2"]?.value ?? 12;
+    const width_2 = rowData?.[width2Index];
+
+    const lMat1Index = selectedUserValues?.["L_MAT_1"]?.value ?? 13;
+    const l_mat_1 = rowData?.[lMat1Index] || "";
+
+    const lMat2Index = selectedUserValues?.["L_MAT_2"]?.value ?? 14;
+    const l_mat_2 = rowData?.[lMat2Index] || "";
+
+    const wMat1Index = selectedUserValues?.["W_MAT_1"]?.value ?? 15;
+    const w_mat_1 = rowData?.[wMat1Index] || "";
+
+    const wMat2Index = selectedUserValues?.["W_MAT_2"]?.value ?? 16;
+    const w_mat_2 = rowData?.[wMat2Index] || "";
+
+    const cnc1Index = selectedUserValues?.["CNC_1"]?.value ?? 19;
+    const cnc_1 = rowData?.[cnc1Index] || "";
+
+    const cnc2Index = selectedUserValues?.["CNC_2"]?.value ?? 20;
+    const cnc_2 = rowData?.[cnc2Index] || "";
+
+    const note1Index = selectedUserValues?.["Note1/Napomene1"]?.value ?? 21;
+    const note_1 = rowData?.[note1Index] || "";
+
+    const note2Index = selectedUserValues?.["Note2/Napomene2"]?.value ?? 22;
+    const note_2 = rowData?.[note2Index] || ""; */
+    console.log("selectedUserValues", selectedUserValues);
     console.log(`material: ${material}`);
     console.log(`Sifra w_mat_1: ${w_mat_1}`);
     console.log(`Sifra w_mat_2: ${w_mat_2}`);
     console.log(`Sifra l_mat_1: ${l_mat_1}`);
     console.log(`Sifra l_mat_2: ${l_mat_2}`);
 
-    const exactMatchLength1 = matchingValues.includes(parseFloat(length_1))
-      ? `ABS ${parseFloat(length_1)} mm`
-      : "";
-    const exactMatchLength2 = matchingValues.includes(parseFloat(length_2))
-      ? `ABS ${parseFloat(length_2)} mm`
-      : "";
-    const exactMatchWidth1 = matchingValues.includes(parseFloat(width_1))
-      ? `ABS ${parseFloat(width_1)} mm`
-      : "";
-    const exactMatchWidth2 = matchingValues.includes(parseFloat(width_1))
-      ? `ABS ${parseFloat(width_2)} mm`
-      : "";
-    const exactMatchMathNameW1 = findMatNameForSifra(kantTrakePath, w_mat_1);
-    const exactMatchMathNameW2 = findMatNameForSifra(kantTrakePath, w_mat_2);
-    const exactMatchMathNameL1 = findMatNameForSifra(kantTrakePath, l_mat_1);
-    const exactMatchMathNameL2 = findMatNameForSifra(kantTrakePath, l_mat_2);
+    //const exactMatchLength1 = /* matchingValues.includes(parseFloat(length_1))
+    // ? */ `ABS ${parseFloat(length_1)} mm`;
+    /* : ""; */
+    //const exactMatchLength2 = /* matchingValues.includes(parseFloat(length_2))
+    // ? */ `ABS ${parseFloat(length_2)} mm`;
+    /* : ""; */
+    //const exactMatchWidth1 = /* matchingValues.includes(parseFloat(width_1))
+    //?  */ `ABS ${parseFloat(width_1)} mm`;
+    /* : ""; */
+    //const exactMatchWidth2 = /* matchingValues.includes(parseFloat(width_1))
+    // ?  */ `ABS ${parseFloat(width_2)} mm`;
+    /* : ""; */
 
-    console.log("exactMatchLength1", exactMatchLength1);
+    function normalizeMatName(name) {
+      if (!name) return "";
+
+      const match = name
+        .toLowerCase()
+        .match(/(?:abs|mm)?\s*[_\-]?\s*(\d+(\.\d+)?)/); // Match number after optional ABS/MM
+
+      return match?.[1] || "";
+    }
+
+    function findClosestKantTraka(kantTrakeData, searchValue) {
+      if (!searchValue || !kantTrakeData) return null;
+
+      const normalizedSearch = normalizeMatName(`ABS ${searchValue} mm`);
+      console.log("Looking for normalized kant traka:", normalizedSearch);
+      //console.log(kantTrakeData);
+      for (const [group, trakeList] of Object.entries(kantTrakeData)) {
+        for (const traka of trakeList) {
+          const norm = normalizeMatName(traka.group);
+          //console.log(`Comparing with: ${traka.matName} -> ${norm}`);
+          if (norm === normalizedSearch) {
+            console.log(`✅ Found: ${traka.group} in group ${group}`);
+            return {
+              group,
+              original: traka.group,
+            };
+          }
+        }
+      }
+
+      console.warn(`❌ No match for kant traka: ${searchValue}`);
+      return null;
+    }
+
+    const matchedLength1 = findClosestKantTraka(kantTrakeData, length_1);
+    const matchedLength2 = findClosestKantTraka(kantTrakeData, length_2);
+    const matchedWidth1 = findClosestKantTraka(kantTrakeData, width_1);
+    const matchedWidth2 = findClosestKantTraka(kantTrakeData, width_2);
+    const exactMatchLength1 = matchedLength1?.original || "";
+    const exactMatchLength2 = matchedLength2?.original || "";
+    const exactMatchWidth1 = matchedWidth1?.original || "";
+    const exactMatchWidth2 = matchedWidth2?.original || "";
+
+    /* const exactMatchMathNameL1 = matchedLength1?.original
+    ? findMatNameForSifra(kantTrakeData, l_mat_1)
+    : null; */
+    /*     const exactMatchLength1 =
+    length_1 === undefined ? "" : `ABS ${parseFloat(length_1)} mm`;
+    const exactMatchLength2 =
+    length_2 === undefined ? "" : `ABS ${parseFloat(length_2)} mm`;
+    const exactMatchWidth1 =
+    width_1 === undefined ? "" : `ABS ${parseFloat(width_1)} mm`;
+    const exactMatchWidth2 =
+    width_2 === undefined ? "" : `ABS ${parseFloat(width_2)} mm`; */
+    function findSifraFromMaterialIfUnchecked(
+      kantTrakeData,
+      groupGuess,
+      materialName
+    ) {
+      // Prefer searching in the guessed group first
+      if (groupGuess && kantTrakeData[groupGuess]) {
+        const match = kantTrakeData[groupGuess].find(
+          (traka) =>
+            traka.matName?.trim().toLowerCase() ===
+            materialName?.trim().toLowerCase()
+        );
+        if (match) {
+          console.log(`✅ Found Sifra: ${match.sifra} in group: ${groupGuess}`);
+          return match.matName;
+        }
+      }
+
+      // Fallback: search all groups if nothing found in the guessed group
+      for (const [group, trakeList] of Object.entries(kantTrakeData)) {
+        const match = trakeList.find(
+          (traka) =>
+            traka.matName?.trim().toLowerCase() ===
+            materialName?.trim().toLowerCase()
+        );
+        if (match) {
+          console.log(
+            `✅ Fallback found Sifra: ${match.sifra} in group: ${group}`
+          );
+          return match.matName;
+        }
+      }
+
+      console.warn(`❌ No Sifra found for material: ${materialName}`);
+      return null;
+    }
+
+    let exactMatchMathNameL1 = null;
+    let exactMatchMathNameL2 = null;
+    let exactMatchMathNameW1 = null;
+    let exactMatchMathNameW2 = null;
+
+    if (checkedValueKantTrake === "true") {
+      exactMatchMathNameL1 = findMatNameForSifra(kantTrakeData, l_mat_1);
+      exactMatchMathNameL2 = findMatNameForSifra(kantTrakeData, l_mat_2);
+      exactMatchMathNameW1 = findMatNameForSifra(kantTrakeData, w_mat_1);
+      exactMatchMathNameW2 = findMatNameForSifra(kantTrakeData, w_mat_2);
+    } else {
+      // Get the ABS group based on thickness values
+      const groupL1 = matchedLength1?.original;
+      const groupL2 = matchedLength2?.original;
+      const groupW1 = matchedWidth1?.original;
+      const groupW2 = matchedWidth2?.original;
+
+      exactMatchMathNameL1 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupL1,
+        material
+      );
+      exactMatchMathNameL2 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupL2,
+        material
+      );
+      exactMatchMathNameW1 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupW1,
+        material
+      );
+      exactMatchMathNameW2 = findSifraFromMaterialIfUnchecked(
+        kantTrakeData,
+        groupW2,
+        material
+      );
+    }
+
+    console.log(
+      exactMatchLength1,
+      exactMatchLength2,
+      exactMatchWidth1,
+      exactMatchWidth2,
+      "exactMatchLength1",
+      exactMatchMathNameW1 ? "true" : "false",
+      exactMatchMathNameW2 ? "true" : "false",
+      exactMatchMathNameL1 ? "true" : "false",
+      exactMatchMathNameL2 ? "true" : "false"
+    );
 
     let noteBoth = "";
     if (note_1 && note_2) {
@@ -560,7 +824,7 @@ function processExcelFile(
     potrosni.ele("POTITEM", {
       TIP: "0",
       INDEX: "0",
-      STR0: "true",
+      STR0: exactMatchLength1 ? "true" : "false",
       STR1: "false",
       STR2: "false",
       STR3: "false",
@@ -571,7 +835,7 @@ function processExcelFile(
 
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
-      STR0: "true",
+      STR0: exactMatchLength1 ? "true" : "false",
       STR1: "false",
       STR2: "false",
       STR3: "false",
@@ -584,7 +848,7 @@ function processExcelFile(
       TIP: "0",
       INDEX: "0",
       STR0: "false",
-      STR1: "true",
+      STR1: exactMatchLength2 ? "true" : "false",
       STR2: "false",
       STR3: "false",
       MATN: exactMatchMathNameL2,
@@ -595,7 +859,7 @@ function processExcelFile(
     potrosni.ele("DEFTRITEM", {
       INDEX: "0",
       STR0: "false",
-      STR1: "true",
+      STR1: exactMatchLength2 ? "true" : "false",
       STR2: "false",
       STR3: "false",
       MATN: exactMatchMathNameL2,
@@ -608,7 +872,7 @@ function processExcelFile(
       INDEX: "0",
       STR0: "false",
       STR1: "false",
-      STR2: "true",
+      STR2: exactMatchWidth1 ? "true" : "false",
       STR3: "false",
       MATN: exactMatchMathNameW1,
       NAZIV: exactMatchWidth1,
@@ -619,7 +883,7 @@ function processExcelFile(
       INDEX: "0",
       STR0: "false",
       STR1: "false",
-      STR2: "true",
+      STR2: exactMatchWidth1 ? "true" : "false",
       STR3: "false",
       MATN: exactMatchMathNameW1,
       NAZIV: exactMatchWidth1,
@@ -632,7 +896,7 @@ function processExcelFile(
       STR0: "false",
       STR1: "false",
       STR2: "false",
-      STR3: "true",
+      STR3: exactMatchWidth2 ? "true" : "false",
       MATN: exactMatchMathNameW2,
       NAZIV: exactMatchWidth2,
       TIPD: "0",
@@ -643,7 +907,7 @@ function processExcelFile(
       STR0: "false",
       STR1: "false",
       STR2: "false",
-      STR3: "true",
+      STR3: exactMatchWidth2 ? "true" : "false",
       MATN: exactMatchMathNameW2,
       NAZIV: exactMatchWidth2,
       TIPD: "0",
