@@ -4,19 +4,34 @@ const {
   getLicenses,
   getLicensesById,
   createLicense,
+  deactivateLicense,
   deleteLicense,
   authorizeLicense,
   checkDeviceRegistration,
+  activateLicense,
 } = require("../controllers/licensesControllers");
 const isDeviceRegistered = require("../middleware/authMiddleware");
-const verifyAdmin = require("../middleware/verifyAdmin");
+//const verifyAdmin = require("../middleware/verifyAdmin");
+const { verifyJwt } = require("../middleware/jwtMiddleware");
 
 const router = express.Router();
 
-router.get("/", verifyAdmin, getLicenses);
-router.get("/:id", verifyAdmin, getLicensesById);
-router.post("/", verifyAdmin, createLicense);
-router.delete("/:licenseKey", verifyAdmin, deleteLicense);
+router.get("/", verifyJwt, /* verifyAdmin, */ getLicenses);
+router.get("/:id", verifyJwt, /* verifyAdmin, */ getLicensesById);
+router.post("/", verifyJwt, /* verifyAdmin, */ createLicense);
+router.put(
+  "/deactivate/:machineId/:type_of_licence",
+  verifyJwt,
+  /* verifyAdmin, */
+  deactivateLicense
+);
+router.put(
+  "/activate/:machineId/:type_of_licence",
+  verifyJwt,
+  /* verifyAdmin, */
+  activateLicense
+);
+router.delete("/:licenseKey", verifyJwt, /* verifyAdmin, */ deleteLicense);
 
 // autorizacija
 router.post("/authorize/:licenseKey", authorizeLicense);
