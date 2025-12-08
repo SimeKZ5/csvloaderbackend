@@ -38,6 +38,7 @@ app.use("/api/korisnici", require("./routes/userRoutes"));
 app.use("/api/excel", require("./routes/excelFormatRoute"));
 app.use("/api/convert", require("./routes/convertDaskeToS3DRoute"));
 app.use("/api/admin", require("./routes/verifyAdminRoute"));
+app.use("/api/events", require("./routes/eventRoutes"));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

@@ -22,6 +22,14 @@ const licensesSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    type_of_licence: {
+      type: String,
+      required: true,
+    },
+    active: {
+      type: Boolean,
+      required: true,
+    },
   },
   { versionKey: false }
 );
