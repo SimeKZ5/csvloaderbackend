@@ -1,6 +1,63 @@
 const { create } = require("xmlbuilder2");
 const path = require("path");
 const fs = require("fs");
+const {
+  buildMacroInputFromCmkText,
+  buildELINKSDocument,
+} = require("../utils/macroElinksSerializer");
+
+const DEFAULT_MACRO_FOLDER = "C:\\CorpusSoftware\\CorpusSolutions\\Makro";
+
+function normalizeBoardType(value) {
+  const numeric = Number(value);
+  if ([0, 1, 2, 4].includes(numeric)) {
+    return String(numeric);
+  }
+
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (!normalized) return "0";
+  if (normalized.includes("front")) return "1";
+  if (normalized.includes("polic") || normalized.includes("shelf")) return "2";
+  if (
+    normalized.includes("radna ploca") ||
+    normalized.includes("worktop") ||
+    normalized.includes("countertop")
+  ) {
+    return "4";
+  }
+
+  return "0";
+}
+
+function normalizeRotGod(value) {
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  const numeric = Number(value);
+  if (!Number.isNaN(numeric)) {
+    if (numeric === 1) return "true";
+    if (numeric === 0) return "false";
+  }
+
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (["1", "true", "yes", "da", "y"].includes(normalized)) return "true";
+  if (["0", "false", "no", "ne", "n", ""].includes(normalized)) return "false";
+
+  return "false";
+}
 
 // Controller to convert JSON (userDaskeValues) to an .S3D file
 const convertDaskeValueToS3D = (req, res) => {
@@ -8,6 +65,12 @@ const convertDaskeValueToS3D = (req, res) => {
   //const pathToKantTrake = req.body.pathToKantTrake;
   //const userClientValues = req.body.userClientValues;
   const kantTrakeData = req.body.kantTrakeData;
+  const macroFolderPath =
+    req.body.macroFolderPath ||
+    req.body.pathToMakrosFolder ||
+    DEFAULT_MACRO_FOLDER;
+  const macroFilesMap = req.body.macroFilesMap;
+  const macroFileNames = req.body.macroFileNames;
   //console.log(kantTrakeData, userClientValues, "userClientValues");
 
   if (!userDaskeValues || !Array.isArray(userDaskeValues)) {
@@ -32,7 +95,7 @@ const convertDaskeValueToS3D = (req, res) => {
       console.log(`Searching for string: ${searchString}`);
 
       const match = fileContent.match(
-        new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`)
+        new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`),
       );
       console.log(`Match found: ${match[0]}`);
       if (match) {
@@ -61,7 +124,7 @@ const convertDaskeValueToS3D = (req, res) => {
       // The regular expression matches the Data element with the given Sifra and extracts the MatName
       const regex = new RegExp(
         `<Data[^>]*Sifra="${sifra}"[^>]*MatName="([^"]+)"`,
-        "i"
+        "i",
       );
       const match = fileContent.match(regex);
 
@@ -79,6 +142,12 @@ const convertDaskeValueToS3D = (req, res) => {
     }
   }
   try {
+    const macroRuntime = createMacroRuntime(
+      macroFolderPath,
+      macroFilesMap,
+      macroFileNames,
+    );
+
     // Find matching values in the Kant Trake file from 0.4 to 10 (step 0.1)
     const matchingValues = [];
     for (let i = 0.4; i <= 10; i += 0.1) {
@@ -94,7 +163,8 @@ const convertDaskeValueToS3D = (req, res) => {
     const xml = processDaskeData(
       userDaskeValues,
       matchingValues,
-      kantTrakeData
+      kantTrakeData,
+      macroRuntime,
     );
 
     const outputFileName = "outputFileName"; // You might derive this from your data
@@ -113,7 +183,12 @@ const convertDaskeValueToS3D = (req, res) => {
 };
 
 // Function to process the JSON data and build the XML
-function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
+function processDaskeData(
+  userDaskeValues,
+  matchingValues,
+  kantTrakeData,
+  macroRuntime,
+) {
   let xmlContent = `<!-- Ver=16-->\r\n`;
 
   const xmlRoot = create().ele("PROJECTFILE", {
@@ -182,7 +257,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
   xmlRoot
     .ele("INFO")
     .txt(
-      "07105450726F6A6563744F706973446174610102000602555103EF380603646174111E4C27C810B9E54006036176610500000000000000000000060372616202000603627270120000000006046272726E120000000006046964776E120000000006036F706912000000000604706B757A0200060370696C020106047064696E110000000000B9E54000"
+      "07105450726F6A6563744F706973446174610102000602555103EF380603646174111E4C27C810B9E54006036176610500000000000000000000060372616202000603627270120000000006046272726E120000000006046964776E120000000006036F706912000000000604706B757A0200060370696C020106047064696E110000000000B9E54000",
     );
 
   xmlRoot.ele("CREATOR", {
@@ -238,6 +313,10 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     const widthVal = parseFloat(item.width) || 0;
     const thVal = item.th || "1";
     const pcVal = item.pc || "1";
+    const boardType = normalizeBoardType(item.type_of_board);
+    const rotGodValue = normalizeRotGod(
+      item.god ?? item.ROTGOD ?? item.rotgod ?? item.smjer_god,
+    );
     //console.log(item.length_1, "matchingvalues", matchingValues);
     // Determine exact matches for lengths and widths
     /* const exactMatchLength1 = matchingValues.includes(parseFloat(item.length_1))
@@ -273,19 +352,19 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     // Find material names based on provided sifre
     const exactMatchMathNameW1 = findMatNameForSifra(
       kantTrakeData,
-      item.w_mat_1
+      item.w_mat_1,
     );
     const exactMatchMathNameW2 = findMatNameForSifra(
       kantTrakeData,
-      item.w_mat_2
+      item.w_mat_2,
     );
     const exactMatchMathNameL1 = findMatNameForSifra(
       kantTrakeData,
-      item.l_mat_1
+      item.l_mat_1,
     );
     const exactMatchMathNameL2 = findMatNameForSifra(
       kantTrakeData,
-      item.l_mat_2
+      item.l_mat_2,
     );
 
     //console.log("item.material", item.material);
@@ -306,17 +385,30 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       "exactMatchMathNameL1",
       exactMatchMathNameL1,
       "exactMatchMathNameL2",
-      exactMatchMathNameL2
+      exactMatchMathNameL2,
+    );
+
+    const requestedMacro = pickRequestedMacroName(item);
+    const macroResolution = resolveMacroForBoard(requestedMacro, macroRuntime);
+    const cncProgram =
+      String(item.cnc_1 ?? "").trim() ||
+      macroResolution.resolvedMacroFile ||
+      "";
+
+    const finalNote1 = String(item.note_1 ?? "").trim();
+    const finalNote2 = appendNoteText(
+      String(item.note_2 ?? "").trim(),
+      macroResolution.note,
     );
 
     // Combine notes if provided
     let noteBoth = "";
-    if (item.note_1 && item.note_2) {
-      noteBoth = `&quot;${item.note_1}&quot;,&quot;${item.note_2}&quot;`;
-    } else if (item.note_1) {
-      noteBoth = `&quot;${item.note_1}&quot;`;
-    } else if (item.note_2) {
-      noteBoth = `&quot;${item.note_2}&quot;`;
+    if (finalNote1 && finalNote2) {
+      noteBoth = `&quot;${finalNote1}&quot;,&quot;${finalNote2}&quot;`;
+    } else if (finalNote1) {
+      noteBoth = `&quot;${finalNote1}&quot;`;
+    } else if (finalNote2) {
+      noteBoth = `&quot;${finalNote2}&quot;`;
     }
 
     // Update the current row's max width if needed
@@ -338,9 +430,8 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     }
 
     // Calculate EZPOS based on whether this is the first row
-    let ezpos = isFirstRow
-      ? widthVal
-      : cumulativeEZPOS + widthVal + rowIncrement;
+    let ezpos =
+      isFirstRow ? widthVal : cumulativeEZPOS + widthVal + rowIncrement;
 
     // Create the ELEMENT node with all necessary attributes
     const element = xmlRoot.ele("ELEMENT", {
@@ -433,7 +524,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     element
       .ele("SELBOX")
       .txt(
-        "070D5473656C656374696F6E426F780102000602555103F0380603707473000000000000000000000000000000000000000000F1380000F2380000F3380000F4380000F5380000F6380000F7380000F8380000F9380000FA380000FB380000FC380000FD380000FE380000FF38000000390000013900000239000003390000043900000539000000"
+        "070D5473656C656374696F6E426F780102000602555103F0380603707473000000000000000000000000000000000000000000F1380000F2380000F3380000F4380000F5380000F6380000F7380000F8380000F9380000FA380000FB380000FC380000FD380000FE380000FF38000000390000013900000239000003390000043900000539000000",
       );
     element.ele("EVAR", { VAR0: "" });
     const efvk = element.ele("EFVK", {
@@ -459,7 +550,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
     const daske = element.ele("DASKE", { DCOUNT: "1" });
     const ad = daske.ele("AD", {
       DNAME: item.board_name,
-      ROTGOD: "false",
+      ROTGOD: rotGodValue,
       DKUT: "0",
       DXPOS: "0",
       DYPOS: "0",
@@ -468,7 +559,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       DUBINA: widthVal.toString(),
       DEBLJINA: thVal,
       SMJER: "2",
-      TIPDASKE: "0",
+      TIPDASKE: boardType,
       FIXTEX: "false",
       VISIBLE: "true",
       BOJA: "10066329",
@@ -487,7 +578,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       MATNAME: item.material,
       IGNOREGOD: "false",
       PRIMJEDBA: "",
-      PROGRAM: item.cnc_1,
+      PROGRAM: cncProgram,
       KXF: "",
       KYF: "",
       KZF: "",
@@ -503,7 +594,7 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       DANCH: "7",
     });
     ad.ele("SELBOX").txt(
-      "070D5473656C656374696F6E426F780102000602555103063906037074730000000000000000000000000000000000000000000739000008390000093900000A3900000B3900000C3900000D3900000E3900000F390000103900001139000012390000133900001439000015390000163900001739000018390000193900001A3900001B39000000"
+      "070D5473656C656374696F6E426F780102000602555103063906037074730000000000000000000000000000000000000000000739000008390000093900000A3900000B3900000C3900000D3900000E3900000F390000103900001139000012390000133900001439000015390000163900001739000018390000193900001A3900001B39000000",
     );
     const potrosni = ad.ele("POTROSNI", { COUNT: "4" });
 
@@ -591,18 +682,267 @@ function processDaskeData(userDaskeValues, matchingValues, kantTrakeData) {
       NAZIV: exactMatchWidth2,
       TIPD: "0",
     });
+
+    if (macroResolution.elinksXml) {
+      try {
+        const elinksRoot = create(macroResolution.elinksXml).root();
+        element.import(elinksRoot);
+      } catch (error) {
+        console.error(
+          `Failed to import ELINKS for macro "${macroResolution.resolvedMacroFile}":`,
+          error,
+        );
+      }
+    }
   });
 
   // Append the PLANES element after processing all items
   xmlRoot
     .ele("PLANES")
     .txt(
-      "071054506C616E65436F6C6C656374696F6E01020006025551031C390606706C616E6573020501070354425001020106025551031D39060364697200000000000000000000803F0000000006027570000000000000803F000000000000000006047368706C0706545348434F4C01020106025551031E3906057368636E74020101070C54536861706553717561726501020106025551031F390606707473636E74020401070F54536861706550617468506F696E74010201060255510320390605706B696E6402010603706F7300401CC50000000000401CC500070F54536861706550617468506F696E74010201060255510321390605706B696E6402010603706F7300401C450000000000401CC500070F54536861706550617468506F696E74010201060255510322390605706B696E6402010603706F7300401C450000000000401C4500070F54536861706550617468506F696E74010201060255510323390605706B696E6402010603706F7300401CC50000000000401C4500000605636F6C6F724694163FDB8A0D3FB072083F0000803F0603636C6F090603706F7300401C450000000000401C4506046364656C0806047069636B0906036E7063080602667705000000000000409C0B400602666805000000000000409C0B4000000006046B6F746C0709544B6F74614C6973740102010602555103243906056B74636E74020001000000070354425001020106025551032539060364697200000080000080BF00000080000000000602757000000000000000800000803F0000000006047368706C0706545348434F4C0102010602555103263906057368636E74020101070C545368617065537175617265010201060255510327390606707473636E74020401070F54536861706550617468506F696E74010201060255510328390605706B696E6402010603706F7300401CC5000000000080A2C400070F54536861706550617468506F696E74010201060255510329390605706B696E6402010603706F7300401C45000000000080A2C400070F54536861706550617468506F696E7401020106025551032A390605706B696E6402010603706F7300401C45000000000080A24400070F54536861706550617468506F696E7401020106025551032B390605706B696E6402010603706F7300401CC5000000000080A24400000605636F6C6F724694163FDB8A0D3FB072083F0000803F0603636C6F090603706F7300401C45000000000080A2C406046364656C0806047069636B0806036E7063080602667705000000000000409C0B40060266680500000000000080A20A4000000006046B6F746C0709544B6F74614C69737401020106025551032C3906056B74636E74020001000000070354425001020106025551032D39060364697200000080000080BF0000008000000000060275700000803F00000080000000800000000006047368706C0706545348434F4C01020106025551032E3906057368636E74020101070C54536861706553717561726501020106025551032F390606707473636E74020401070F54536861706550617468506F696E74010201060255510330390605706B696E6402010603706F7300401CC5000000000080A2C400070F54536861706550617468506F696E74010201060255510331390605706B696E6402010603706F7300401C45000000000080A2C400070F54536861706550617468506F696E74010201060255510332390605706B696E6402010603706F7300401C45000000000080A24400070F54536861706550617468506F696E74010201060255510333390605706B696E6402010603706F7300401CC5000000000080A24400000605636F6C6F724694163FDB8A0D3FB072083F0000803F0603636C6F090603706F7300401CC5000000000080A2C406046364656C0806047069636B0806036E7063080602667705000000000000409C0B40060266680500000000000080A20A4000000006046B6F746C0709544B6F74614C6973740102010602555103343906056B74636E74020001000000070354425001020106025551033539060364697200000080000080BF0000000000000000060275700000008000000080000080BF0000000006047368706C0706545348434F4C0102010602555103363906057368636E74020001000006046B6F746C0709544B6F74614C6973740102010602555103373906056B74636E74020001000000070354425001020106025551033839060364697200000080000080BF000000800000000006027570000080BF00000080000000800000000006047368706C0706545348434F4C0102010602555103393906057368636E74020001000006046B6F746C0709544B6F74614C69737401020106025551033A3906056B74636E740200010000000000"
+      "071054506C616E65436F6C6C656374696F6E01020006025551031C390606706C616E6573020501070354425001020106025551031D39060364697200000000000000000000803F0000000006027570000000000000803F000000000000000006047368706C0706545348434F4C01020106025551031E3906057368636E74020101070C54536861706553717561726501020106025551031F390606707473636E74020401070F54536861706550617468506F696E74010201060255510320390605706B696E6402010603706F7300401CC50000000000401CC500070F54536861706550617468506F696E74010201060255510321390605706B696E6402010603706F7300401C450000000000401CC500070F54536861706550617468506F696E74010201060255510322390605706B696E6402010603706F7300401C450000000000401C4500070F54536861706550617468506F696E74010201060255510323390605706B696E6402010603706F7300401CC50000000000401C4500000605636F6C6F724694163FDB8A0D3FB072083F0000803F0603636C6F090603706F7300401C450000000000401C4506046364656C0806047069636B0906036E7063080602667705000000000000409C0B400602666805000000000000409C0B4000000006046B6F746C0709544B6F74614C6973740102010602555103243906056B74636E74020001000000070354425001020106025551032539060364697200000080000080BF00000080000000000602757000000000000000800000803F0000000006047368706C0706545348434F4C0102010602555103263906057368636E74020101070C545368617065537175617265010201060255510327390606707473636E74020401070F54536861706550617468506F696E74010201060255510328390605706B696E6402010603706F7300401CC5000000000080A2C400070F54536861706550617468506F696E74010201060255510329390605706B696E6402010603706F7300401C45000000000080A2C400070F54536861706550617468506F696E7401020106025551032A390605706B696E6402010603706F7300401C45000000000080A24400070F54536861706550617468506F696E7401020106025551032B390605706B696E6402010603706F7300401CC5000000000080A24400000605636F6C6F724694163FDB8A0D3FB072083F0000803F0603636C6F090603706F7300401C45000000000080A2C406046364656C0806047069636B0806036E7063080602667705000000000000409C0B40060266680500000000000080A20A4000000006046B6F746C0709544B6F74614C69737401020106025551032C3906056B74636E74020001000000070354425001020106025551032D39060364697200000080000080BF0000008000000000060275700000803F00000080000000800000000006047368706C0706545348434F4C01020106025551032E3906057368636E74020101070C54536861706553717561726501020106025551032F390606707473636E74020401070F54536861706550617468506F696E74010201060255510330390605706B696E6402010603706F7300401CC5000000000080A2C400070F54536861706550617468506F696E74010201060255510331390605706B696E6402010603706F7300401C45000000000080A2C400070F54536861706550617468506F696E74010201060255510332390605706B696E6402010603706F7300401C45000000000080A24400070F54536861706550617468506F696E74010201060255510333390605706B696E6402010603706F7300401CC5000000000080A24400000605636F6C6F724694163FDB8A0D3FB072083F0000803F0603636C6F090603706F7300401CC5000000000080A2C406046364656C0806047069636B0806036E7063080602667705000000000000409C0B40060266680500000000000080A20A4000000006046B6F746C0709544B6F74614C6973740102010602555103343906056B74636E74020001000000070354425001020106025551033539060364697200000080000080BF0000000000000000060275700000008000000080000080BF0000000006047368706C0706545348434F4C0102010602555103363906057368636E74020001000006046B6F746C0709544B6F74614C6973740102010602555103373906056B74636E74020001000000070354425001020106025551033839060364697200000080000080BF000000800000000006027570000080BF00000080000000800000000006047368706C0706545348434F4C0102010602555103393906057368636E74020001000006046B6F746C0709544B6F74614C69737401020106025551033A3906056B74636E740200010000000000",
     );
 
   const xmlString = xmlRoot.end({ prettyPrint: true, headless: true });
   xmlContent += xmlString;
   return xmlContent;
+}
+
+function normalizeMacroKey(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .toLowerCase()
+    .replace(/\.cmk$/i, "");
+}
+
+function appendNoteText(baseNote, extraNote) {
+  const base = String(baseNote ?? "").trim();
+  const extra = String(extraNote ?? "").trim();
+
+  if (!base) return extra;
+  if (!extra) return base;
+
+  return `${base} | ${extra}`;
+}
+
+function pickRequestedMacroName(item) {
+  const candidates = [item?.macro_cmk, item?.macro, item?.MACRO, item?.makro];
+
+  for (const candidate of candidates) {
+    const normalized = String(candidate ?? "").trim();
+    if (normalized) return normalized;
+  }
+
+  return "";
+}
+
+function levenshteinDistance(a, b) {
+  const source = String(a ?? "");
+  const target = String(b ?? "");
+
+  const matrix = Array.from({ length: source.length + 1 }, () =>
+    new Array(target.length + 1).fill(0),
+  );
+
+  for (let i = 0; i <= source.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= target.length; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i <= source.length; i += 1) {
+    for (let j = 1; j <= target.length; j += 1) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return matrix[source.length][target.length];
+}
+
+function findClosestMacroName(inputName, availableFiles) {
+  const normalizedInput = normalizeMacroKey(inputName);
+  let bestFile = "";
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const fileName of availableFiles) {
+    const distance = levenshteinDistance(
+      normalizedInput,
+      normalizeMacroKey(fileName),
+    );
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestFile = fileName;
+    }
+  }
+
+  return bestFile;
+}
+
+function createMacroRuntime(macroFolderPath, macroFilesMap, macroFileNames) {
+  const runtime = {
+    folderPath: String(macroFolderPath ?? "").trim() || DEFAULT_MACRO_FOLDER,
+    files: [],
+    byKey: new Map(),
+    fileContentsByName: new Map(),
+    parsedByFile: new Map(),
+  };
+
+  const incomingMacroFiles =
+    (
+      macroFilesMap &&
+      typeof macroFilesMap === "object" &&
+      !Array.isArray(macroFilesMap)
+    ) ?
+      Object.entries(macroFilesMap)
+    : [];
+
+  for (const [rawName, rawContent] of incomingMacroFiles) {
+    if (typeof rawContent !== "string") continue;
+
+    const normalizedName = String(rawName ?? "").trim();
+    if (!normalizedName) continue;
+
+    const fileName =
+      /\.cmk$/i.test(normalizedName) ? normalizedName : `${normalizedName}.CMK`;
+
+    runtime.fileContentsByName.set(fileName, rawContent);
+  }
+
+  const incomingMacroNames =
+    Array.isArray(macroFileNames) ? macroFileNames : [];
+  const seenMacroKeys = new Set();
+  for (const rawName of incomingMacroNames) {
+    const normalizedName = String(rawName ?? "").trim();
+    if (!normalizedName) continue;
+
+    const fileName =
+      /\.cmk$/i.test(normalizedName) ? normalizedName : `${normalizedName}.CMK`;
+    const normalizedKey = normalizeMacroKey(fileName);
+    if (seenMacroKeys.has(normalizedKey)) continue;
+    seenMacroKeys.add(normalizedKey);
+    runtime.files.push(fileName);
+  }
+
+  if (runtime.fileContentsByName.size > 0) {
+    for (const fileName of runtime.fileContentsByName.keys()) {
+      const normalizedKey = normalizeMacroKey(fileName);
+      if (seenMacroKeys.has(normalizedKey)) continue;
+      seenMacroKeys.add(normalizedKey);
+      runtime.files.push(fileName);
+    }
+
+    runtime.files.sort((a, b) => a.localeCompare(b));
+
+    runtime.files.forEach((fileName) => {
+      runtime.byKey.set(normalizeMacroKey(fileName), fileName);
+    });
+
+    return runtime;
+  }
+
+  if (runtime.files.length > 0) {
+    runtime.files.sort((a, b) => a.localeCompare(b));
+    runtime.files.forEach((fileName) => {
+      runtime.byKey.set(normalizeMacroKey(fileName), fileName);
+    });
+  }
+
+  try {
+    if (!fs.existsSync(runtime.folderPath)) {
+      return runtime;
+    }
+
+    runtime.files = fs
+      .readdirSync(runtime.folderPath, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isFile() && path.extname(entry.name).toLowerCase() === ".cmk",
+      )
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+
+    runtime.files.forEach((fileName) => {
+      runtime.byKey.set(normalizeMacroKey(fileName), fileName);
+    });
+  } catch (error) {
+    console.error("Failed to initialize macro runtime:", error);
+  }
+
+  return runtime;
+}
+
+function loadMacroElinksXml(fileName, macroRuntime) {
+  if (!fileName) return "";
+
+  const cacheKey = normalizeMacroKey(fileName);
+  if (macroRuntime.parsedByFile.has(cacheKey)) {
+    return macroRuntime.parsedByFile.get(cacheKey);
+  }
+
+  try {
+    const fileContent =
+      macroRuntime.fileContentsByName.get(fileName) ??
+      fs.readFileSync(path.join(macroRuntime.folderPath, fileName), "utf8");
+    const macroInput = buildMacroInputFromCmkText(fileContent, {
+      macroName: path.parse(fileName).name || "X_CONNECTION_TYPE",
+    });
+    const elinksXml = buildELINKSDocument(macroInput);
+    macroRuntime.parsedByFile.set(cacheKey, elinksXml);
+    return elinksXml;
+  } catch (error) {
+    console.error(`Failed to read/serialize macro "${fileName}":`, error);
+    return "";
+  }
+}
+
+function resolveMacroForBoard(requestedMacro, macroRuntime) {
+  const selected = String(requestedMacro ?? "").trim();
+  if (!selected) {
+    return {
+      resolvedMacroFile: "",
+      elinksXml: "",
+      note: "",
+    };
+  }
+
+  if (macroRuntime.files.length === 0) {
+    return {
+      resolvedMacroFile: "",
+      elinksXml: "",
+      note: `Macro "${selected}" was provided, but no .CMK files were found in "${macroRuntime.folderPath}".`,
+    };
+  }
+
+  const exactFile = macroRuntime.byKey.get(normalizeMacroKey(selected));
+  if (exactFile) {
+    return {
+      resolvedMacroFile: exactFile,
+      elinksXml: loadMacroElinksXml(exactFile, macroRuntime),
+      note: "",
+    };
+  }
+
+  const closest = findClosestMacroName(selected, macroRuntime.files);
+  return {
+    resolvedMacroFile: "",
+    elinksXml: "",
+    note:
+      closest ?
+        `Macro "${selected}" not found. Closest available macro is "${closest}".`
+      : `Macro "${selected}" not found in "${macroRuntime.folderPath}".`,
+  };
+}
+
+function normalizeC6DatAttributeLineBreaks(xml) {
+  return String(xml ?? "").replace(/C6DAT="([^"]*)"/gs, (_match, value) => {
+    const normalized = String(value)
+      .replace(/\r\n/g, "\n")
+      .replace(/\n/g, "&#xA;");
+    return `C6DAT="${normalized}"`;
+  });
 }
 
 // Helper: Find material name for a given sifra in the Kant Trake file
@@ -643,8 +983,9 @@ function saveAsS3DFile(xml, fileName) {
   }
 
   const filePath = path.join(outputDir, `${fileName}.S3D`);
+  const normalizedXml = normalizeC6DatAttributeLineBreaks(xml);
   // Replace LF with CRLF and add BOM for UTF-8
-  const xmlWithCRLF = xml.replace(/\n/g, "\r\n");
+  const xmlWithCRLF = normalizedXml.replace(/\n/g, "\r\n");
   const utf8Bom = Buffer.from([0xef, 0xbb, 0xbf]);
   const xmlBuffer = Buffer.from(xmlWithCRLF, "utf8");
   const outputBuffer = Buffer.concat([utf8Bom, xmlBuffer]);
