@@ -338,6 +338,64 @@ const getUsageEventsByLicenseName = async (req, res) => {
   }
 };
 
+const getLicenseInfoByDeviceId = async (req, res) => {
+  try {
+    const { deviceId, type_of_licence } = req.query;
+
+    if (!deviceId || typeof deviceId !== "string" || !deviceId.trim()) {
+      return res.status(400).json({ message: "Query param 'deviceId' is required" });
+    }
+
+    const normalizedDeviceId = deviceId.trim();
+    const normalizedType =
+      typeof type_of_licence === "string" && type_of_licence.trim()
+        ? type_of_licence.trim()
+        : null;
+
+    let license = null;
+
+    if (normalizedType) {
+      license = await License.findOne({
+        machineId: normalizedDeviceId,
+        type_of_licence: normalizedType,
+      })
+        .select("name machineId type_of_licence license active licenseUsed")
+        .lean();
+    }
+
+    if (!license) {
+      license = await License.findOne({ machineId: normalizedDeviceId })
+        .select("name machineId type_of_licence license active licenseUsed")
+        .lean();
+    }
+
+    if (!license) {
+      return res.status(200).json({
+        found: false,
+        data: null,
+      });
+    }
+
+    return res.status(200).json({
+      found: true,
+      data: {
+        name: license.name || null,
+        deviceId: license.machineId || null,
+        type_of_licence: license.type_of_licence || null,
+        license: license.license || null,
+        active: license.active,
+        licenseUsed: license.licenseUsed,
+      },
+    });
+  } catch (err) {
+    console.error("getLicenseInfoByDeviceId error:", err);
+    return res.status(500).json({
+      message: "Error while fetching license info by device id",
+      error: err.message,
+    });
+  }
+};
+
 const createEvent = async (req, res) => {
   try {
     const { deviceId, type, meta } = req.body;
@@ -377,4 +435,5 @@ module.exports = {
   createEvent,
   getUsageByLicenseName,
   getUsageEventsByLicenseName,
+  getLicenseInfoByDeviceId,
 };

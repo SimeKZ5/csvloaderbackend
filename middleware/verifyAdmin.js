@@ -13,7 +13,7 @@ const verifyAdmin = (req, res, next) => {
 
   const { role } = req.user;
 
-  const isAdmin = role === 1 || 3;
+  const isAdmin = role === 1 || role === 3;
 
   if (!isAdmin) {
     return res.status(403).json({ message: "Acess denied" });
