@@ -1,10 +1,10 @@
 const express = require("express");
 const { getUsers, getUserById } = require("../controllers/userControllers");
 const router = express.Router();
-const { verifyJwt } = require("../middleware/jwtMiddleware");
+const verifyInternalApiKey = require("../middleware/verifyInternalApiKey");
 
-router.get("/", verifyJwt, getUsers);
+router.get("/", verifyInternalApiKey, getUsers);
 
-router.get("/:id", verifyJwt, getUserById);
+router.get("/:id", verifyInternalApiKey, getUserById);
 
 module.exports = router;

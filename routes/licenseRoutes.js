@@ -13,25 +13,48 @@ const {
 const isDeviceRegistered = require("../middleware/authMiddleware");
 //const verifyAdmin = require("../middleware/verifyAdmin");
 const { verifyJwt } = require("../middleware/jwtMiddleware");
+const verifyInternalApiKey = require("../middleware/verifyInternalApiKey");
 
 const router = express.Router();
 
-router.get("/", verifyJwt, /* verifyAdmin, */ getLicenses);
-router.get("/:id", verifyJwt, /* verifyAdmin, */ getLicensesById);
-router.post("/", verifyJwt, /* verifyAdmin, */ createLicense);
+router.get(
+  "/",
+  verifyJwt,
+  verifyInternalApiKey,
+  /* verifyAdmin, */ getLicenses,
+);
+router.get(
+  "/:id",
+  verifyJwt,
+  verifyInternalApiKey,
+  /* verifyAdmin, */ getLicensesById,
+);
+router.post(
+  "/",
+  verifyJwt,
+  verifyInternalApiKey,
+  /* verifyAdmin, */ createLicense,
+);
 router.put(
   "/deactivate/:machineId/:type_of_licence",
   verifyJwt,
+  verifyInternalApiKey,
   /* verifyAdmin, */
-  deactivateLicense
+  deactivateLicense,
 );
 router.put(
   "/activate/:machineId/:type_of_licence",
   verifyJwt,
+  verifyInternalApiKey,
   /* verifyAdmin, */
-  activateLicense
+  activateLicense,
 );
-router.delete("/:licenseKey", verifyJwt, /* verifyAdmin, */ deleteLicense);
+router.delete(
+  "/:licenseKey",
+  verifyJwt,
+  verifyInternalApiKey,
+  /* verifyAdmin, */ deleteLicense,
+);
 
 // autorizacija
 router.post("/authorize/:licenseKey", authorizeLicense);
