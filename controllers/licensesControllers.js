@@ -1,6 +1,6 @@
 const License = require("../models/licensesSchema");
 const { nanoid } = require("nanoid");
-const { isAdminMachine } = require("../utils/verifyAdminUtils");
+//const { isAdminMachine } = require("../utils/verifyAdminUtils");
 
 const getLicenses = async (req, res) => {
   /* const encryptedMachineId = req.headers["x-encrypted-machine-id"];
@@ -176,7 +176,6 @@ const authorizeLicense = async (req, res) => {
 
 const checkDeviceRegistration = async (req, res) => {
   const { deviceId, type_of_licence } = req.body;
-  console.log(req.body);
   console.log("Received request to check device registration");
   console.log("Device ID:", deviceId);
   console.log("Type of app", type_of_licence);
@@ -195,7 +194,6 @@ const checkDeviceRegistration = async (req, res) => {
     if (type_of_licence != null) {
       query.type_of_licence = type_of_licence;
     }
-    console.log(query);
     const license = await License.findOne(query);
 
     if (!license) {

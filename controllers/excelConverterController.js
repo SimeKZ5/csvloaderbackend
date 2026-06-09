@@ -2,6 +2,12 @@ const XLSX = require("xlsx");
 const { create } = require("xmlbuilder2");
 const path = require("path");
 const fs = require("fs");
+const {
+  buildMacroInputFromCmkText,
+  buildELINKSDocument,
+} = require("../utils/macroElinksSerializer");
+
+const DEFAULT_MACRO_FOLDER = "C:\\CorpusSoftware\\CorpusSolutions\\Makro";
 
 function loadKantTrakeFromFile(filePath) {
   try {
@@ -37,6 +43,28 @@ const convertExcelToS3D = (req, res) => {
   const checkedValueKantTrake = req.body.checkedValue || "false";
   const selectedUserValues = JSON.parse(req.body.selectedUserValues || "{}");
   const startRow = parseInt(req.body.startRow, 10) || 12;
+  const macroFolderPath =
+    req.body.macroFolderPath ||
+    req.body.pathToMakrosFolder ||
+    DEFAULT_MACRO_FOLDER;
+  let macroFilesMap = req.body.macroFilesMap;
+  if (typeof req.body.macroFilesMap === "string") {
+    try {
+      macroFilesMap = JSON.parse(req.body.macroFilesMap || "{}");
+    } catch (error) {
+      console.error("Failed to parse macroFilesMap from request body:", error);
+      macroFilesMap = {};
+    }
+  }
+  let macroFileNames = req.body.macroFileNames;
+  if (typeof req.body.macroFileNames === "string") {
+    try {
+      macroFileNames = JSON.parse(req.body.macroFileNames || "[]");
+    } catch (error) {
+      console.error("Failed to parse macroFileNames from request body:", error);
+      macroFileNames = [];
+    }
+  }
 
   // console.log("selectedUserValuesselectedUserValues", selectedUserValues);
 
@@ -72,6 +100,12 @@ const convertExcelToS3D = (req, res) => {
     }
   }
   try {
+    const macroRuntime = createMacroRuntime(
+      macroFolderPath,
+      macroFilesMap,
+      macroFileNames
+    );
+
     // Parse the Kant Trake file to check for each value from 0.5 to 99
     const matchingValues = [];
     for (let i = 0.4; i <= 10; i += 0.1) {
@@ -105,7 +139,8 @@ const convertExcelToS3D = (req, res) => {
       //pathToKantTrake,
       kantTrakeData,
       selectedUserValues,
-      checkedValueKantTrake
+      checkedValueKantTrake,
+      macroRuntime
     );
     const outputFileName = path.basename(
       file.originalname,
@@ -152,7 +187,8 @@ function processExcelFile(
   //kantTrakePath,
   kantTrakeData,
   selectedUserValues,
-  checkedValueKantTrake
+  checkedValueKantTrake,
+  macroRuntime
 ) {
   //console.log("kantTrakePath:", kantTrakePath);
   console.log("startRowstartRow", startRow);
@@ -276,6 +312,9 @@ function processExcelFile(
   //let currentRowMaxWidth = 0; // Track the maximum width for the current row
   let numberOfRow = 0;
   let isFirstRow = true;
+  const macroColumnIndex = detectMacroColumnIndex(data, startRow);
+  const boardTypeColumnIndex = detectBoardTypeColumnIndex(data, startRow);
+  const rotGodColumnIndex = detectRotGodColumnIndex(data, startRow);
   console.log("rowIndex", rowIndex);
   // Fetch row data
   while (rowIndex < data.length) {
@@ -362,6 +401,28 @@ function processExcelFile(
       getCellValue(rowData, "Note1/Napomene1", selectedUserValues, 21) || "";
     const note_2 =
       getCellValue(rowData, "Note2/Napomene2", selectedUserValues, 22) || "";
+    const rotGodFromColumn =
+      rotGodColumnIndex >= 0 ? rowData?.[rotGodColumnIndex] || "" : "";
+    const rotGodValue = normalizeRotGod(
+      getCellValue(rowData, "ROTGOD", selectedUserValues, null) ||
+        getCellValue(rowData, "GOD", selectedUserValues, null) ||
+        getCellValue(rowData, "SMJER GOD", selectedUserValues, null) ||
+        getCellValue(rowData, "SMJER_GOD", selectedUserValues, null) ||
+        rotGodFromColumn
+    );
+    const boardTypeFromColumn =
+      boardTypeColumnIndex >= 0 ? rowData?.[boardTypeColumnIndex] || "" : "";
+    const boardType = normalizeBoardType(
+      getCellValue(rowData, "TYPE_OF_BOARD", selectedUserValues, null) ||
+        getCellValue(rowData, "TIP_DASKE", selectedUserValues, null) ||
+        getCellValue(rowData, "TIPDASKE", selectedUserValues, null) ||
+        boardTypeFromColumn
+    );
+    const macroFromColumn =
+      macroColumnIndex >= 0 ? rowData?.[macroColumnIndex] || "" : "";
+    const macroRequested = String(
+      getCellValue(rowData, "MACRO", selectedUserValues, null) || macroFromColumn
+    ).trim();
 
     /*  const positionIndex = selectedUserValues?.["Position/Pozicija"]?.value ?? 1;
     const position = rowData?.[positionIndex] || "DefaultName";
@@ -583,13 +644,22 @@ function processExcelFile(
       exactMatchMathNameL2 ? "true" : "false"
     );
 
+    const macroResolution = resolveMacroForBoard(macroRequested, macroRuntime);
+    const cncProgram =
+      String(cnc_1 ?? "").trim() || macroResolution.resolvedMacroFile || "";
+    const finalNote1 = String(note_1 ?? "").trim();
+    const finalNote2 = appendNoteText(
+      String(note_2 ?? "").trim(),
+      macroResolution.note
+    );
+
     let noteBoth = "";
-    if (note_1 && note_2) {
-      noteBoth = `&quot;${note_1}&quot;,&quot;${note_2}&quot;`;
-    } else if (note_1) {
-      noteBoth = `&quot;${note_1}&quot;`;
-    } else if (note_2) {
-      noteBoth = `&quot;${note_2}&quot;`;
+    if (finalNote1 && finalNote2) {
+      noteBoth = `&quot;${finalNote1}&quot;,&quot;${finalNote2}&quot;`;
+    } else if (finalNote1) {
+      noteBoth = `&quot;${finalNote1}&quot;`;
+    } else if (finalNote2) {
+      noteBoth = `&quot;${finalNote2}&quot;`;
     }
 
     // Update the maximum width for the current row
@@ -769,7 +839,7 @@ function processExcelFile(
 
     const ad = daske.ele("AD", {
       DNAME: board_name,
-      ROTGOD: "false",
+      ROTGOD: rotGodValue,
       DKUT: "0",
       DXPOS: "0",
       DYPOS: "0",
@@ -778,7 +848,7 @@ function processExcelFile(
       DUBINA: width,
       DEBLJINA: th,
       SMJER: "2",
-      TIPDASKE: "0",
+      TIPDASKE: boardType,
       FIXTEX: "false",
       VISIBLE: "true",
       BOJA: "10066329",
@@ -797,7 +867,7 @@ function processExcelFile(
       MATNAME: material,
       IGNOREGOD: "false",
       PRIMJEDBA: "",
-      PROGRAM: cnc_1,
+      PROGRAM: cncProgram,
       KXF: "",
       KYF: "",
       KZF: "",
@@ -913,6 +983,18 @@ function processExcelFile(
       TIPD: "0",
     });
 
+    if (macroResolution.elinksXml) {
+      try {
+        const elinksRoot = create(macroResolution.elinksXml).root();
+        element.import(elinksRoot);
+      } catch (error) {
+        console.error(
+          `Failed to import ELINKS for macro "${macroResolution.resolvedMacroFile}":`,
+          error
+        );
+      }
+    }
+
     // Move to the next row
     rowIndex++;
   }
@@ -932,6 +1014,358 @@ function processExcelFile(
   return xmlContent;
 }
 
+function detectMacroColumnIndex(sheetRows, startRow) {
+  const maxHeaderRow = Math.max(0, Number(startRow || 1) - 1);
+  for (let rowIndex = 0; rowIndex <= maxHeaderRow; rowIndex += 1) {
+    const row = sheetRows[rowIndex];
+    if (!Array.isArray(row)) continue;
+
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const cell = String(row[colIndex] ?? "").trim().toUpperCase();
+      if (cell === "MACRO" || cell === "MAKRO") {
+        return colIndex;
+      }
+    }
+  }
+  return -1;
+}
+
+function normalizeHeaderToken(value) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+function detectBoardTypeColumnIndex(sheetRows, startRow) {
+  const maxHeaderRow = Math.max(0, Number(startRow || 1) - 1);
+  const allowedHeaders = new Set([
+    "TYPE OF BOARD",
+    "TYPE_OF_BOARD",
+    "TIP DASKE",
+    "TIP_DASKE",
+    "TIPDASKE",
+  ]);
+
+  for (let rowIndex = 0; rowIndex <= maxHeaderRow; rowIndex += 1) {
+    const row = sheetRows[rowIndex];
+    if (!Array.isArray(row)) continue;
+
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const cell = normalizeHeaderToken(row[colIndex]);
+      if (allowedHeaders.has(cell)) {
+        return colIndex;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function detectRotGodColumnIndex(sheetRows, startRow) {
+  const maxHeaderRow = Math.max(0, Number(startRow || 1) - 1);
+  const allowedHeaders = new Set([
+    "ROTGOD",
+    "GOD",
+    "SMJER GOD",
+    "SMJER_GOD",
+    "SMJERGOD",
+  ]);
+
+  for (let rowIndex = 0; rowIndex <= maxHeaderRow; rowIndex += 1) {
+    const row = sheetRows[rowIndex];
+    if (!Array.isArray(row)) continue;
+
+    for (let colIndex = 0; colIndex < row.length; colIndex += 1) {
+      const cell = normalizeHeaderToken(row[colIndex]);
+      if (allowedHeaders.has(cell)) {
+        return colIndex;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function normalizeRotGod(value) {
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+
+  const numeric = Number(value);
+  if (!Number.isNaN(numeric)) {
+    if (numeric === 1) return "true";
+    if (numeric === 0) return "false";
+  }
+
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (["1", "true", "yes", "da", "y"].includes(normalized)) return "true";
+  if (["0", "false", "no", "ne", "n", ""].includes(normalized)) return "false";
+
+  return "false";
+}
+
+function normalizeBoardType(value) {
+  const numeric = Number(value);
+  if ([0, 1, 2, 4].includes(numeric)) {
+    return String(numeric);
+  }
+
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
+
+  if (!normalized) return "0";
+  if (normalized.includes("front")) return "1";
+  if (normalized.includes("polic") || normalized.includes("shelf")) return "2";
+  if (
+    normalized.includes("radna ploca") ||
+    normalized.includes("worktop") ||
+    normalized.includes("countertop")
+  ) {
+    return "4";
+  }
+
+  return "0";
+}
+
+function normalizeMacroKey(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .toLowerCase()
+    .replace(/\.cmk$/i, "");
+}
+
+function appendNoteText(baseNote, extraNote) {
+  const base = String(baseNote ?? "").trim();
+  const extra = String(extraNote ?? "").trim();
+
+  if (!base) return extra;
+  if (!extra) return base;
+
+  return `${base} | ${extra}`;
+}
+
+function levenshteinDistance(a, b) {
+  const source = String(a ?? "");
+  const target = String(b ?? "");
+
+  const matrix = Array.from({ length: source.length + 1 }, () =>
+    new Array(target.length + 1).fill(0)
+  );
+
+  for (let i = 0; i <= source.length; i += 1) matrix[i][0] = i;
+  for (let j = 0; j <= target.length; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i <= source.length; i += 1) {
+    for (let j = 1; j <= target.length; j += 1) {
+      const cost = source[i - 1] === target[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[source.length][target.length];
+}
+
+function findClosestMacroName(inputName, availableFiles) {
+  const normalizedInput = normalizeMacroKey(inputName);
+  let bestFile = "";
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  for (const fileName of availableFiles) {
+    const distance = levenshteinDistance(
+      normalizedInput,
+      normalizeMacroKey(fileName)
+    );
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestFile = fileName;
+    }
+  }
+
+  return bestFile;
+}
+
+function createMacroRuntime(macroFolderPath, macroFilesMap, macroFileNames) {
+  const runtime = {
+    folderPath:
+      String(macroFolderPath ?? "").trim() || DEFAULT_MACRO_FOLDER,
+    files: [],
+    byKey: new Map(),
+    fileContentsByName: new Map(),
+    parsedByFile: new Map(),
+  };
+
+  const incomingMacroFiles =
+    macroFilesMap &&
+    typeof macroFilesMap === "object" &&
+    !Array.isArray(macroFilesMap)
+      ? Object.entries(macroFilesMap)
+      : [];
+
+  for (const [rawName, rawContent] of incomingMacroFiles) {
+    if (typeof rawContent !== "string") continue;
+
+    const normalizedName = String(rawName ?? "").trim();
+    if (!normalizedName) continue;
+
+    const fileName = /\.cmk$/i.test(normalizedName)
+      ? normalizedName
+      : `${normalizedName}.CMK`;
+
+    runtime.fileContentsByName.set(fileName, rawContent);
+  }
+
+  const incomingMacroNames = Array.isArray(macroFileNames) ? macroFileNames : [];
+  const seenMacroKeys = new Set();
+  for (const rawName of incomingMacroNames) {
+    const normalizedName = String(rawName ?? "").trim();
+    if (!normalizedName) continue;
+
+    const fileName = /\.cmk$/i.test(normalizedName)
+      ? normalizedName
+      : `${normalizedName}.CMK`;
+    const normalizedKey = normalizeMacroKey(fileName);
+    if (seenMacroKeys.has(normalizedKey)) continue;
+    seenMacroKeys.add(normalizedKey);
+    runtime.files.push(fileName);
+  }
+
+  if (runtime.fileContentsByName.size > 0) {
+    for (const fileName of runtime.fileContentsByName.keys()) {
+      const normalizedKey = normalizeMacroKey(fileName);
+      if (seenMacroKeys.has(normalizedKey)) continue;
+      seenMacroKeys.add(normalizedKey);
+      runtime.files.push(fileName);
+    }
+
+    runtime.files.sort((a, b) => a.localeCompare(b));
+
+    runtime.files.forEach((fileName) => {
+      runtime.byKey.set(normalizeMacroKey(fileName), fileName);
+    });
+
+    return runtime;
+  }
+
+  if (runtime.files.length > 0) {
+    runtime.files.sort((a, b) => a.localeCompare(b));
+    runtime.files.forEach((fileName) => {
+      runtime.byKey.set(normalizeMacroKey(fileName), fileName);
+    });
+  }
+
+  try {
+    if (!fs.existsSync(runtime.folderPath)) {
+      return runtime;
+    }
+
+    runtime.files = fs
+      .readdirSync(runtime.folderPath, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isFile() && path.extname(entry.name).toLowerCase() === ".cmk"
+      )
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+
+    runtime.files.forEach((fileName) => {
+      runtime.byKey.set(normalizeMacroKey(fileName), fileName);
+    });
+  } catch (error) {
+    console.error("Failed to initialize macro runtime:", error);
+  }
+
+  return runtime;
+}
+
+function loadMacroElinksXml(fileName, macroRuntime) {
+  if (!fileName) return "";
+
+  const cacheKey = normalizeMacroKey(fileName);
+  if (macroRuntime.parsedByFile.has(cacheKey)) {
+    return macroRuntime.parsedByFile.get(cacheKey);
+  }
+
+  try {
+    const fileContent =
+      macroRuntime.fileContentsByName.get(fileName) ??
+      fs.readFileSync(path.join(macroRuntime.folderPath, fileName), "utf8");
+    const macroInput = buildMacroInputFromCmkText(fileContent, {
+      macroName: path.parse(fileName).name || "X_CONNECTION_TYPE",
+    });
+    const elinksXml = buildELINKSDocument(macroInput);
+    macroRuntime.parsedByFile.set(cacheKey, elinksXml);
+    return elinksXml;
+  } catch (error) {
+    console.error(`Failed to read/serialize macro "${fileName}":`, error);
+    return "";
+  }
+}
+
+function resolveMacroForBoard(requestedMacro, macroRuntime) {
+  const selected = String(requestedMacro ?? "").trim();
+  if (!selected) {
+    return {
+      resolvedMacroFile: "",
+      elinksXml: "",
+      note: "",
+    };
+  }
+
+  if (macroRuntime.files.length === 0) {
+    return {
+      resolvedMacroFile: "",
+      elinksXml: "",
+      note: `Macro "${selected}" was provided, but no .CMK files were found in "${macroRuntime.folderPath}".`,
+    };
+  }
+
+  const exactFile = macroRuntime.byKey.get(normalizeMacroKey(selected));
+  if (exactFile) {
+    return {
+      resolvedMacroFile: exactFile,
+      elinksXml: loadMacroElinksXml(exactFile, macroRuntime),
+      note: "",
+    };
+  }
+
+  const closest = findClosestMacroName(selected, macroRuntime.files);
+  return {
+    resolvedMacroFile: "",
+    elinksXml: "",
+    note: closest
+      ? `Macro "${selected}" not found. Closest available macro is "${closest}".`
+      : `Macro "${selected}" not found in "${macroRuntime.folderPath}".`,
+  };
+}
+
+function normalizeC6DatAttributeLineBreaks(xml) {
+  return String(xml ?? "").replace(/C6DAT="([^"]*)"/gs, (_match, value) => {
+    const normalized = String(value)
+      .replace(/\r\n/g, "\n")
+      .replace(/\n/g, "&#xA;");
+    return `C6DAT="${normalized}"`;
+  });
+}
+
 // Function to save the XML as a .S3D file
 function saveAsS3DFile(xml, fileName) {
   const outputDir = path.join(__dirname, "..", "output");
@@ -940,9 +1374,10 @@ function saveAsS3DFile(xml, fileName) {
   }
 
   const filePath = path.join(outputDir, `${fileName}.S3D`);
+  const normalizedXml = normalizeC6DatAttributeLineBreaks(xml);
 
   // Convert the XML string to use CRLF line endings
-  const xmlWithCRLF = xml.replace(/\n/g, "\r\n");
+  const xmlWithCRLF = normalizedXml.replace(/\n/g, "\r\n");
 
   // Convert the XML string to a buffer with UTF-8 encoding
   const utf8Bom = Buffer.from([0xef, 0xbb, 0xbf]);

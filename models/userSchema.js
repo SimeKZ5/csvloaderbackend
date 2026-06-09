@@ -12,13 +12,13 @@ const userSchema = new mongoose.Schema(
       unique: true,
       match: [/^\S+@\S+\.\S+$/, "Please use a valid email address."],
     },
-    password: { type: String, required: true },
+    password: { type: String, required: true, select: false },
     date: {
       type: Date,
       default: Date.now(),
     },
   },
-  { versionKey: false }
+  { versionKey: false },
 );
 const User = mongoose.model("User", userSchema);
 
