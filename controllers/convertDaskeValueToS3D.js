@@ -5,8 +5,24 @@ const {
   buildMacroInputFromCmkText,
   buildELINKSDocument,
 } = require("../utils/macroElinksSerializer");
+const {
+  findClosestKantTraka,
+  findMatNameForSifra,
+  findSifraFromMaterialIfUnchecked,
+} = require("../utils/kantTrakeUtils");
 
 const DEFAULT_MACRO_FOLDER = "C:\\CorpusSoftware\\CorpusSolutions\\Makro";
+
+function normalizeBoolean(value, fallback = false) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (typeof value === "boolean") return value;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (["true", "1", "yes", "da"].includes(normalized)) return true;
+  if (["false", "0", "no", "ne"].includes(normalized)) return false;
+
+  return fallback;
+}
 
 function normalizeBoardType(value) {
   const numeric = Number(value);
@@ -65,6 +81,8 @@ const convertDaskeValueToS3D = (req, res) => {
   //const pathToKantTrake = req.body.pathToKantTrake;
   //const userClientValues = req.body.userClientValues;
   const kantTrakeData = req.body.kantTrakeData;
+  const checkedValue = normalizeBoolean(req.body.checkedValue, false);
+  const checkedValueKT = normalizeBoolean(req.body.checkedValueKT, true);
   const macroFolderPath =
     req.body.macroFolderPath ||
     req.body.pathToMakrosFolder ||
@@ -82,33 +100,6 @@ const convertDaskeValueToS3D = (req, res) => {
   if (!kantTrakeData || typeof kantTrakeData !== "object") {
     console.error("Invalid trakeData");
     return res.status(400).json({ message: "kantTrakeData is not an object." });
-  }
-
-  function parseKantTrakeFile(filePath, searchValue) {
-    console.log(filePath, searchValue);
-    try {
-      const fileContent = fs.readFileSync(filePath, "utf8");
-      console.log(`File content from ${filePath} loaded successfully.`);
-
-      const searchString = `Naziv="ABS ${searchValue} mm"`;
-
-      console.log(`Searching for string: ${searchString}`);
-
-      const match = fileContent.match(
-        new RegExp(`Naziv="ABS ${searchValue} mm[^"]*"`),
-      );
-      console.log(`Match found: ${match[0]}`);
-      if (match) {
-        console.log(`Found match: ${match[0]}`);
-        return match[0]; // Return the entire matching string
-      }
-
-      console.log(`No match found for: ${searchString}`);
-      return null; // Return null if no match is found
-    } catch (error) {
-      console.error(`Error reading file at ${filePath}:`, error);
-      return null; // Return null if an error occurs
-    }
   }
 
   /* function findMatNameForSifra(filePath, sifra) {
@@ -148,23 +139,13 @@ const convertDaskeValueToS3D = (req, res) => {
       macroFileNames,
     );
 
-    // Find matching values in the Kant Trake file from 0.4 to 10 (step 0.1)
-    const matchingValues = [];
-    for (let i = 0.4; i <= 10; i += 0.1) {
-      i = Math.round(i * 10) / 10;
-
-      //console.log(kantTrakeData, i);
-      if (parseKantTrakeFile(kantTrakeData, i)) {
-        matchingValues.push(i);
-      }
-    }
-
     // Process the provided JSON data into our XML structure
     const xml = processDaskeData(
       userDaskeValues,
-      matchingValues,
       kantTrakeData,
       macroRuntime,
+      checkedValue,
+      checkedValueKT,
     );
 
     const outputFileName = "outputFileName"; // You might derive this from your data
@@ -185,9 +166,10 @@ const convertDaskeValueToS3D = (req, res) => {
 // Function to process the JSON data and build the XML
 function processDaskeData(
   userDaskeValues,
-  matchingValues,
   kantTrakeData,
   macroRuntime,
+  checkedValue,
+  checkedValueKT,
 ) {
   let xmlContent = `<!-- Ver=16-->\r\n`;
 
@@ -327,36 +309,21 @@ function processDaskeData(
     const rotGodValue = normalizeRotGod(
       item.god ?? item.ROTGOD ?? item.rotgod ?? item.smjer_god,
     );
-    //console.log(item.length_1, "matchingvalues", matchingValues);
-    // Determine exact matches for lengths and widths
-    /* const exactMatchLength1 = matchingValues.includes(parseFloat(item.length_1))
-      ? `ABS ${parseFloat(item.length_1)} mm`
-      : "";
-    const exactMatchLength2 = matchingValues.includes(parseFloat(item.length_2))
-      ? `ABS ${parseFloat(item.length_2)} mm`
-      : "";
-    const exactMatchWidth1 = matchingValues.includes(parseFloat(item.width_1))
-      ? `ABS ${parseFloat(item.width_1)} mm`
-      : "";
-    const exactMatchWidth2 = matchingValues.includes(parseFloat(item.width_2))
-      ? `ABS ${parseFloat(item.width_2)} mm`
-      : ""; */
-
     const matchedLength1 = findClosestKantTraka(
       kantTrakeData,
-      item.w_mat_1,
+      item.kant_group_l_1,
     );
     const matchedLength2 = findClosestKantTraka(
       kantTrakeData,
-      item.w_mat_2,
+      item.kant_group_l_2,
     );
     const matchedWidth1 = findClosestKantTraka(
       kantTrakeData,
-      item.l_mat_1,
+      item.kant_group_w_1,
     );
     const matchedWidth2 = findClosestKantTraka(
       kantTrakeData,
-      item.l_mat_2,
+      item.kant_group_w_2,
     );
 
     const exactMatchLength1 = matchedLength1?.original || "";
@@ -795,90 +762,78 @@ function processDaskeData(
         });
       }
 
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: exactMatchLength1 ? "true" : "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL1,
-      NAZIV: exactMatchLength1,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: exactMatchLength1 ? "true" : "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL1,
-      NAZIV: exactMatchLength1,
-      TIPD: "0",
-    });
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: "false",
-      STR1: exactMatchLength2 ? "true" : "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL2,
-      NAZIV: exactMatchLength2,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: "false",
-      STR1: exactMatchLength2 ? "true" : "false",
-      STR2: "false",
-      STR3: "false",
-      MATN: exactMatchMathNameL2,
-      NAZIV: exactMatchLength2,
-      TIPD: "0",
-    });
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: exactMatchWidth1 ? "true" : "false",
-      STR3: "false",
-      MATN: exactMatchMathNameW1,
-      NAZIV: exactMatchWidth1,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: exactMatchWidth1 ? "true" : "false",
-      STR3: "false",
-      MATN: exactMatchMathNameW1,
-      NAZIV: exactMatchWidth1,
-      TIPD: "0",
-    });
-    potrosni.ele("POTITEM", {
-      TIP: "0",
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: exactMatchWidth2 ? "true" : "false",
-      MATN: exactMatchMathNameW2,
-      NAZIV: exactMatchWidth2,
-      TIPD: "0",
-    });
-    potrosni.ele("DEFTRITEM", {
-      INDEX: "0",
-      STR0: "false",
-      STR1: "false",
-      STR2: "false",
-      STR3: exactMatchWidth2 ? "true" : "false",
-      MATN: exactMatchMathNameW2,
-      NAZIV: exactMatchWidth2,
-      TIPD: "0",
-    });
+      if (hasGroupValue(item.kant_group_w_2)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "true",
+          STR2: "false",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "true",
+          STR2: "false",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
+
+      if (hasGroupValue(item.kant_group_l_1)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "true",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "true",
+          STR3: "false",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
+
+      if (hasGroupValue(item.kant_group_l_2)) {
+        potrosni.ele("POTITEM", {
+          TIP: "0",
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: "true",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+        potrosni.ele("DEFTRITEM", {
+          INDEX: "0",
+          STR0: "false",
+          STR1: "false",
+          STR2: "false",
+          STR3: "true",
+          MATN: item.material || "",
+          NAZIV: "",
+          TIPD: "0",
+        });
+      }
+    }
 
     if (macroResolution.elinksXml) {
       try {
