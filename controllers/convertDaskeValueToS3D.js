@@ -613,6 +613,17 @@ function processDaskeData(
     console.log("ignoreKantTrakeCompletly", !ignoreKantTrakeCompletly);
     const hasGroupValue = (v) =>
       v !== undefined && v !== null && String(v).trim() !== "";
+    const hasEdgeValue = (groupValue, materialCode) =>
+      hasGroupValue(groupValue) || hasGroupValue(materialCode);
+    const resolveIgnoredEdgeMaterial = (materialCode) => {
+      const code = String(materialCode ?? "").trim();
+      if (!code) return item.material || "";
+      return findMatNameForSifra(kantTrakeData, code) || "";
+    };
+    const ignoredWidth1Material = resolveIgnoredEdgeMaterial(item.w_mat_1);
+    const ignoredWidth2Material = resolveIgnoredEdgeMaterial(item.w_mat_2);
+    const ignoredLength1Material = resolveIgnoredEdgeMaterial(item.l_mat_1);
+    const ignoredLength2Material = resolveIgnoredEdgeMaterial(item.l_mat_2);
 
     console.log(hasGroupValue(item.kant_group_l_1));
     const potrosni = ad.ele("POTROSNI", { COUNT: "4" });
@@ -738,7 +749,7 @@ function processDaskeData(
         });
       }
     } else {
-      if (hasGroupValue(item.kant_group_w_1)) {
+      if (hasEdgeValue(item.kant_group_w_1, item.w_mat_1)) {
         potrosni.ele("POTITEM", {
           TIP: "0",
           INDEX: "0",
@@ -746,7 +757,7 @@ function processDaskeData(
           STR1: "false",
           STR2: "false",
           STR3: "false",
-          MATN: item.material || "",
+          MATN: ignoredWidth1Material,
           NAZIV: "",
           TIPD: "0",
         });
@@ -756,13 +767,13 @@ function processDaskeData(
           STR1: "false",
           STR2: "false",
           STR3: "false",
-          MATN: item.material || "",
+          MATN: ignoredWidth1Material,
           NAZIV: "",
           TIPD: "0",
         });
       }
 
-      if (hasGroupValue(item.kant_group_w_2)) {
+      if (hasEdgeValue(item.kant_group_w_2, item.w_mat_2)) {
         potrosni.ele("POTITEM", {
           TIP: "0",
           INDEX: "0",
@@ -770,7 +781,7 @@ function processDaskeData(
           STR1: "true",
           STR2: "false",
           STR3: "false",
-          MATN: item.material || "",
+          MATN: ignoredWidth2Material,
           NAZIV: "",
           TIPD: "0",
         });
@@ -780,13 +791,13 @@ function processDaskeData(
           STR1: "true",
           STR2: "false",
           STR3: "false",
-          MATN: item.material || "",
+          MATN: ignoredWidth2Material,
           NAZIV: "",
           TIPD: "0",
         });
       }
 
-      if (hasGroupValue(item.kant_group_l_1)) {
+      if (hasEdgeValue(item.kant_group_l_1, item.l_mat_1)) {
         potrosni.ele("POTITEM", {
           TIP: "0",
           INDEX: "0",
@@ -794,7 +805,7 @@ function processDaskeData(
           STR1: "false",
           STR2: "true",
           STR3: "false",
-          MATN: item.material || "",
+          MATN: ignoredLength1Material,
           NAZIV: "",
           TIPD: "0",
         });
@@ -804,13 +815,13 @@ function processDaskeData(
           STR1: "false",
           STR2: "true",
           STR3: "false",
-          MATN: item.material || "",
+          MATN: ignoredLength1Material,
           NAZIV: "",
           TIPD: "0",
         });
       }
 
-      if (hasGroupValue(item.kant_group_l_2)) {
+      if (hasEdgeValue(item.kant_group_l_2, item.l_mat_2)) {
         potrosni.ele("POTITEM", {
           TIP: "0",
           INDEX: "0",
@@ -818,7 +829,7 @@ function processDaskeData(
           STR1: "false",
           STR2: "false",
           STR3: "true",
-          MATN: item.material || "",
+          MATN: ignoredLength2Material,
           NAZIV: "",
           TIPD: "0",
         });
@@ -828,7 +839,7 @@ function processDaskeData(
           STR1: "false",
           STR2: "false",
           STR3: "true",
-          MATN: item.material || "",
+          MATN: ignoredLength2Material,
           NAZIV: "",
           TIPD: "0",
         });

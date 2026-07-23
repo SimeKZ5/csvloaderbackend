@@ -26,9 +26,12 @@ function findClosestKantTraka(kantTrakeData, searchValue) {
 
 function findMatNameForSifra(kantTrakeData, sifra) {
   if (!sifra || !kantTrakeData) return null;
+  const normalizedSifra = String(sifra).trim().toLowerCase();
   for (const fileKey in kantTrakeData) {
     const trakeList = kantTrakeData[fileKey];
-    const found = trakeList.find((traka) => traka.sifra === sifra);
+    const found = trakeList.find(
+      (traka) => String(traka.sifra ?? "").trim().toLowerCase() === normalizedSifra,
+    );
     if (found) return found.matName;
   }
   return null;
