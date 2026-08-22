@@ -17,7 +17,6 @@ const getLicenses = async (req, res) => {
         .json({ message: "Access Denied: Unauthorized machine ID" });
     } */
 
-    // Fetch and return licenses if verified
     const licenses = await License.find();
     res.json(licenses);
   } catch (err) {
@@ -135,7 +134,7 @@ const deleteLicense = async (req, res) => {
 
 const authorizeLicense = async (req, res) => {
   const { licenseKey } = req.params;
-  const { deviceId, type_of_app, active } = req.body;
+  const { deviceId, type_of_app } = req.body;
 
   try {
     const license = await License.findOne({ license: licenseKey });
@@ -160,9 +159,12 @@ const authorizeLicense = async (req, res) => {
         .json({ message: "Licenca nije za ovaj tip aplikacije!" });
     }
 
+    if (license.active !== true) {
+      return res.status(403).json({ message: "Licenca nije aktivna!" });
+    }
+
     license.machineId = deviceId;
     license.licenseUsed = true;
-    license.active = active;
     await license.save();
 
     res.status(200).json({
@@ -183,14 +185,9 @@ const checkDeviceRegistration = async (req, res) => {
     return res.status(400).json({ message: "Device ID is required" });
   }
 
-  /* if (!typeOfApplication) {
-    return res.status(400).json({ message: "Type of application is missing!" });
-  } */
-
   try {
     const query = { machineId: deviceId };
 
-    // Only filter by type_of_licence when provided
     if (type_of_licence != null) {
       query.type_of_licence = type_of_licence;
     }
